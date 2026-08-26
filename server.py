@@ -661,6 +661,21 @@ def initialize_database() -> None:
                         "INSERT INTO deliverable_types (course_id, name) VALUES (?, ?)",
                         [(existing_course["id"], name) for name in ("Resenha", "Artigo", "Apresentação", "Artigo final")],
                     )
+            hero_video_migration_key = "pea5003_hero_video_2026_08_26"
+            if not database.execute(
+                "SELECT 1 FROM app_metadata WHERE key = ?", (hero_video_migration_key,)
+            ).fetchone():
+                database.execute(
+                    """
+                    UPDATE courses SET cover_media_type = 'video',
+                        cover_video = 'assets/pea5003-hero.webm', updated_at = CURRENT_TIMESTAMP
+                    WHERE UPPER(code) = 'PEA5003'
+                    """
+                )
+                database.execute(
+                    "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
+                    (hero_video_migration_key, utc_now_iso()),
+                )
             apply_official_catalog(database)
             return
         database.executemany(
