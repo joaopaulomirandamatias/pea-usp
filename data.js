@@ -119,7 +119,7 @@
       },
       {
         code: 'PEA5714',
-        title: 'Automação Sistemas Industriais e Portuários',
+        title: 'Automação de Sistemas Industriais e Portuários',
         shortTitle: 'Automação industrial e portuária',
         semester: '1º semestre de 2026',
         status: 'Arquivada',
@@ -133,6 +133,8 @@
         professor: 'Profa. Dra. Lídia Rebello Dias',
         updatedAt: '02 jul. 2026 · 17:30',
         cover: 'assets/course-pea5714.webp',
+        coverMediaType: 'video',
+        coverVideo: 'assets/pea5714-hero.webm',
         accent: '#ffb15c',
         driveUrl: 'https://drive.google.com/drive/folders/11BmJQxhewM4_X3u4yks6lKbxnWUIb7BG',
         driveConnected: true,

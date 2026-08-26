@@ -530,7 +530,7 @@ OFFICIAL_COURSE_CATALOG = {
         "catalog_url": "https://uspdigital.usp.br/janus/componente/catalogoDisciplinasInicial.jsf?action=3&sgldis=PEA5004",
     },
     "PEA5714": {
-        "title": "Automação Sistemas Industriais e Portuários",
+        "title": "Automação de Sistemas Industriais e Portuários",
         "short_title": "Automação industrial e portuária",
         "description": "Apresentar o funcionamento dos setores portuário e industrial brasileiros, seus atores, desafios e oportunidades com foco em automação de processos, ambiente regulatório, tecnologias emergentes e legadas e gestão de riscos.",
         "ementa": "[1] Conceitos da pesquisa científica.\n[2] Ferramentas de automação no comércio exterior via portos.\n[3] Operador Econômico Autorizado (OEA).\n[4] Meio ambiente, saúde e segurança em ambientes portuários.\n[5] Modelo de logística portuária.\n[6] Análise e gestão de risco no contexto da automação de sistemas industriais e portuários.\n[7] Tecnologias legadas e emergentes: aplicações e impactos na indústria e nos portos.\n[8] Estudos de caso.",
@@ -565,6 +565,7 @@ def apply_course_hero_videos(database: sqlite3.Connection) -> None:
     hero_videos = {
         "PEA5003": ("assets/pea5003-hero.webm", "pea5003_hero_video_2026_08_26"),
         "PEA5004": ("assets/pea5004-hero.webm", "pea5004_hero_video_2026_08_26"),
+        "PEA5714": ("assets/pea5714-hero.webm", "pea5714_hero_video_2026_08_26"),
     }
     for code, (video_path, migration_key) in hero_videos.items():
         if database.execute(
@@ -583,6 +584,25 @@ def apply_course_hero_videos(database: sqlite3.Connection) -> None:
             "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
             (migration_key, utc_now_iso()),
         )
+
+
+def apply_course_copy_updates(database: sqlite3.Connection) -> None:
+    migration_key = "pea5714_title_2026_08_26"
+    if database.execute(
+        "SELECT 1 FROM app_metadata WHERE key = ?", (migration_key,)
+    ).fetchone():
+        return
+    database.execute(
+        """
+        UPDATE courses SET title = 'Automação de Sistemas Industriais e Portuários',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE UPPER(code) = 'PEA5714'
+        """
+    )
+    database.execute(
+        "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
+        (migration_key, utc_now_iso()),
+    )
 
 
 def connect() -> sqlite3.Connection:
@@ -687,6 +707,7 @@ def initialize_database() -> None:
                     )
             apply_course_hero_videos(database)
             apply_official_catalog(database)
+            apply_course_copy_updates(database)
             return
         database.executemany(
             """
@@ -756,6 +777,7 @@ def initialize_database() -> None:
                     (article_id, student_id),
                 )
         apply_official_catalog(database)
+        apply_course_copy_updates(database)
 
 
 def row_dict(row: sqlite3.Row | None) -> dict | None:
