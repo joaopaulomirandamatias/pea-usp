@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+disciplinas.db
+disciplinas.db-shm
+disciplinas.db-wal
+uploads/*
+.DS_Store

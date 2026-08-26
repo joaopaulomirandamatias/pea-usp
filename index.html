@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071522">
+  <meta name="description" content="Rota da Disciplina — ambiente imersivo de aprendizagem para disciplinas PEA/USP.">
+  <title>Rota da Disciplina · PEA/USP</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="student-page">
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+  <div class="page-noise" aria-hidden="true"></div>
+  <div class="scroll-progress" aria-hidden="true"><span id="scrollProgress"></span></div>
+
+  <header class="site-header" id="siteHeader">
+    <a class="wordmark" href="#top" aria-label="Rota da Disciplina, início">
+      <img class="epusp-seal" src="assets/epusp-logo.webp" alt="" width="44" height="44">
+      <span>Rota<br>da disciplina</span>
+    </a>
+    <button class="course-trigger" id="courseTrigger" aria-expanded="false" aria-controls="courseSwitcher">
+      <span><small>Disciplina ativa</small><strong id="headerCourseCode">PEA5004</strong></span>
+      <span class="trigger-arrow" aria-hidden="true">↓</span>
+    </button>
+    <nav class="header-nav" aria-label="Navegação principal">
+      <a href="#proxima-aula">Próxima aula</a>
+      <a href="#trilha">Trilha</a>
+      <a href="#materiais">Materiais</a>
+      <a href="#apresentacao">Apresentação</a>
+    </nav>
+    <div class="header-actions">
+      <a class="icon-link" href="admin.html" aria-label="Abrir painel da professora">Painel docente</a>
+      <button class="access-button" id="accessButton"><span class="status-led" aria-hidden="true"></span><span id="accessLabel">Acessar com Nº USP</span></button>
+    </div>
+  </header>
+
+  <aside class="course-switcher" id="courseSwitcher" aria-label="Escolher disciplina" hidden>
+    <div class="switcher-head">
+      <div>
+        <span class="eyebrow">Disciplinas da professora</span>
+        <h2>Escolha uma rota</h2>
+      </div>
+      <button class="close-button" id="closeSwitcher" aria-label="Fechar seletor">×</button>
+    </div>
+    <div class="switcher-grid" id="switcherGrid"></div>
+  </aside>
+  <div class="switcher-scrim" id="switcherScrim" hidden></div>
+
+  <main id="conteudo">
+    <section class="cinematic-hero" id="top" aria-labelledby="heroTitle">
+      <div class="hero-media" id="heroMedia" aria-hidden="true"></div>
+      <div class="hero-shade" aria-hidden="true"></div>
+      <div class="chart-grid" aria-hidden="true"></div>
+      <div class="hero-content shell">
+        <div class="hero-copy reveal">
+          <div class="hero-kicker">
+            <span id="heroCode">PEA5004</span>
+            <span>Escola Politécnica · USP</span>
+          </div>
+          <h1 id="heroTitle">Sistemas de Automação para Monitoramento e Segurança</h1>
+          <p id="heroDescription">Uma jornada pelos sistemas que mantêm pessoas, cargas e ecossistemas seguros em terminais que nunca param.</p>
+          <div class="hero-actions">
+            <a class="primary-button" href="#trilha">Continuar a trilha <span aria-hidden="true">↘</span></a>
+            <button class="text-button" id="openAccessFromHero">Ver materiais protegidos</button>
+          </div>
+        </div>
+
+        <aside class="signal-panel reveal" aria-label="Estado da disciplina">
+          <div class="signal-head">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span>Semestre em curso</span>
+            <span id="heroSemester">2º sem. 2026</span>
+          </div>
+          <div class="signal-radar" aria-hidden="true">
+            <span class="radar-sweep"></span>
+            <i class="ping p1"></i><i class="ping p2"></i><i class="ping p3"></i>
+          </div>
+          <dl>
+            <div><dt>Progresso</dt><dd id="heroProgress">38%</dd></div>
+            <div><dt>Próximo encontro</dt><dd id="nextClass">02 set.</dd></div>
+            <div><dt>Drive</dt><dd><span class="inline-ok" id="heroDriveDot"></span> <span id="heroDriveStatus">Sincronizado</span></dd></div>
+          </dl>
+        </aside>
+      </div>
+      <div class="hero-foot shell">
+        <div class="scroll-cue"><span aria-hidden="true"></span>Role para entrar no sistema</div>
+        <div class="coordinates">23°56'S · 46°20'W <i></i> ROTA 01</div>
+      </div>
+    </section>
+
+    <section class="next-class-section section-pad" id="proxima-aula" aria-labelledby="nextClassTitle">
+      <div class="shell">
+        <header class="next-class-heading reveal">
+          <div class="section-index"><span>00</span><i></i><small>Agora</small></div>
+          <div>
+            <p class="eyebrow">Próxima aula em destaque</p>
+            <h2 id="nextClassTitle">A pauta do<br>próximo encontro.</h2>
+          </div>
+          <p class="next-class-rule">A aula do dia permanece aqui até o fim da data. Depois, a próxima assume automaticamente.</p>
+        </header>
+
+        <article class="class-call-sheet reveal" id="nextClassCard">
+          <aside class="class-date-block">
+            <span id="nextClassWeekday">Quarta</span>
+            <strong id="nextClassDay">26</strong>
+            <span id="nextClassMonth">Agosto · 2026</span>
+            <i aria-hidden="true"></i>
+            <small id="nextClassTime">14:00</small>
+          </aside>
+          <div class="class-call-main">
+            <div class="call-title">
+              <div><span class="eyebrow" id="nextClassTheme">Panorama de riscos integrados</span><h3 id="nextClassName">Risco público, privado e ambiental</h3></div>
+              <p id="nextClassLocation">PEA · Sala A2-06</p>
+            </div>
+            <div class="two-act-grid">
+              <section class="class-act specialist-act" aria-labelledby="specialistActTitle">
+                <div class="act-number"><span>1º momento</span><strong>01</strong></div>
+                <p class="eyebrow" id="specialistActTitle">Conversa com especialista</p>
+                <h4 id="specialistName">Profissional convidado</h4>
+                <p class="act-role" id="specialistRole">Especialista do setor</p>
+                <p id="specialistTopic">A temática da aula será apresentada pelo profissional convidado.</p>
+              </section>
+              <section class="class-act student-act" aria-labelledby="studentActTitle">
+                <div class="act-number"><span>2º momento</span><strong>02</strong></div>
+                <p class="eyebrow" id="studentActTitle">Artigos apresentados pelos alunos</p>
+                <div class="next-article-list" id="nextArticleList"></div>
+              </section>
+            </div>
+            <footer class="call-actions">
+              <p><span class="live-dot" aria-hidden="true"></span><strong id="classCountdown">Amanhã</strong> · pauta atualizada automaticamente</p>
+              <button class="primary-button protected-action" data-action="upload">Enviar material da aula <span aria-hidden="true">↗</span></button>
+            </footer>
+          </div>
+        </article>
+        <div class="next-class-empty" id="nextClassEmpty" hidden>
+          <span class="eyebrow">Agenda concluída</span>
+          <h3>Não há uma próxima aula cadastrada.</h3>
+          <p>A professora pode incluir novas datas no painel docente.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="manifest-section section-pad" aria-labelledby="manifestTitle">
+      <div class="shell manifest-layout">
+        <div class="section-index reveal"><span>01</span><i></i><small>Manifesto</small></div>
+        <div class="manifest-copy reveal">
+          <p class="eyebrow">Por que esta disciplina existe</p>
+          <h2 id="manifestTitle">Um porto não é um lugar.<br><em>É um sistema em movimento.</em></h2>
+        </div>
+        <div class="manifest-body reveal">
+          <p id="courseDescriptionLong">Nesta rota, cada sensor, protocolo e decisão deixa de ser uma peça isolada. Você aprende a ler o conjunto: o risco que aparece, o dado que chega e a resposta que precisa acontecer.</p>
+          <dl class="course-facts">
+            <div><dt>Carga horária</dt><dd id="factWorkload">60 h</dd></div>
+            <div><dt>Créditos</dt><dd id="factCredits">4</dd></div>
+            <div><dt>Encontros</dt><dd id="factMeetings">8 etapas</dd></div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <section class="course-map section-pad" id="trilha" aria-labelledby="trailTitle">
+      <div class="shell">
+        <header class="section-heading reveal">
+          <div class="section-index"><span>02</span><i></i><small>Trilha</small></div>
+          <div>
+            <p class="eyebrow">Seu percurso no semestre</p>
+            <h2 id="trailTitle">Cada etapa acende<br>uma nova camada.</h2>
+          </div>
+          <div class="trail-legend" aria-label="Legenda da trilha">
+            <span><i class="done"></i> concluído</span>
+            <span><i class="current"></i> agora</span>
+            <span><i></i> a seguir</span>
+          </div>
+        </header>
+        <div class="route-canvas">
+          <svg class="route-line" viewBox="0 0 1200 520" preserveAspectRatio="none" aria-hidden="true">
+            <path class="route-shadow" d="M30 410 C150 110 320 90 420 275 S670 520 790 260 S1030 20 1170 170"/>
+            <path class="route-track" d="M30 410 C150 110 320 90 420 275 S670 520 790 260 S1030 20 1170 170"/>
+          </svg>
+          <div class="module-grid" id="moduleGrid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="briefing-section section-pad" id="ementa" aria-labelledby="briefingTitle">
+      <div class="briefing-photo" id="briefingPhoto" aria-hidden="true"></div>
+      <div class="shell briefing-layout">
+        <div class="section-index light reveal"><span>03</span><i></i><small>Briefing</small></div>
+        <div class="briefing-panel reveal">
+          <p class="eyebrow">Ementa da disciplina</p>
+          <h2 id="briefingTitle">O mapa antes<br>da travessia.</h2>
+          <p id="syllabusText"></p>
+          <div class="objective-list" id="objectiveList"></div>
+          <p class="professor-line"><span>Responsável</span><strong id="professorName">Profa. Dra. Lídia Rebello Dias</strong></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="materials-section section-pad" id="materiais" aria-labelledby="materialsTitle">
+      <div class="shell">
+        <header class="section-heading reveal">
+          <div class="section-index"><span>04</span><i></i><small>Acervo</small></div>
+          <div>
+            <p class="eyebrow">Material sincronizado do Google Drive</p>
+            <h2 id="materialsTitle">Uma estrutura.<br>Sempre atualizada.</h2>
+          </div>
+          <div class="sync-stamp"><span class="sync-icon" aria-hidden="true">↻</span><small>Última sincronização</small><strong id="syncTime">Hoje, 18:42</strong></div>
+        </header>
+
+        <div class="materials-layout">
+          <div class="folder-browser reveal">
+            <div class="browser-bar"><span></span><span></span><span></span><p>Drive / <strong id="drivePath">PEA5004_2026</strong></p></div>
+            <div class="folder-list" id="folderList"></div>
+          </div>
+          <aside class="reading-desk reveal">
+            <div class="desk-head">
+              <p class="eyebrow">Na mesa de leitura</p>
+              <span id="readingCount">4 artigos</span>
+            </div>
+            <div id="readingList"></div>
+            <button class="secondary-button protected-action" data-action="drive">Abrir acervo completo <span aria-hidden="true">↗</span></button>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="presentation-section section-pad" id="apresentacao" aria-labelledby="presentationTitle">
+      <div class="presentation-orbit" aria-hidden="true"><span></span><i></i><b></b></div>
+      <div class="shell presentation-layout">
+        <div class="section-index light reveal"><span>05</span><i></i><small>Sua vez</small></div>
+        <div class="presentation-copy reveal">
+          <p class="eyebrow">Apresentação de artigos</p>
+          <h2 id="presentationTitle">Entre em cena.<br><em>Defenda uma ideia.</em></h2>
+          <p>Escolha uma etapa, forme seu grupo e reserve a apresentação. As orientações da professora aparecem antes do envio.</p>
+          <button class="primary-button light protected-action" data-action="presentation">Cadastrar apresentação <span aria-hidden="true">↘</span></button>
+        </div>
+        <aside class="tip-reel reveal">
+          <p class="eyebrow">4 truques de apresentação</p>
+          <ol id="tipList"></ol>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-grid">
+      <a class="wordmark" href="#top"><img class="epusp-seal" src="assets/epusp-logo.webp" alt="" width="44" height="44"><span>Rota<br>da disciplina</span></a>
+      <p>Um ambiente de aprendizagem para acompanhar o semestre, encontrar materiais e transformar leitura em conversa.</p>
+      <div><span class="eyebrow">Escola Politécnica da USP</span><a href="admin.html">Painel da professora ↗</a></div>
+      <p class="footer-meta">Protótipo navegável · Conteúdo local</p>
+    </div>
+  </footer>
+
+  <dialog class="app-dialog access-dialog" id="accessDialog">
+    <form method="dialog" class="dialog-card" id="accessForm">
+      <button class="dialog-close" type="button" data-close="accessDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow">Acesso da turma</span>
+      <h2>Confirme sua matrícula</h2>
+      <p>Use o Nº USP e o e-mail que a professora cadastrou nesta disciplina.</p>
+      <label>Número USP<input name="nusp" inputmode="numeric" autocomplete="username" placeholder="Ex.: 12345678" required pattern="[0-9]{7,10}"></label>
+      <label>E-mail USP<input name="email" type="email" autocomplete="email" placeholder="voce@usp.br" required></label>
+      <p class="form-hint">Para testar: <strong>12345678</strong> e <strong>ana.souza@usp.br</strong></p>
+      <p class="form-error" id="accessError" role="alert"></p>
+      <button class="primary-button" value="default" type="submit">Entrar na disciplina</button>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog presentation-dialog" id="presentationDialog">
+    <form method="dialog" class="dialog-card wide" id="presentationForm">
+      <button class="dialog-close" type="button" data-close="presentationDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow">Reserva de apresentação</span>
+      <h2>Sua cena no semestre</h2>
+      <div class="form-columns">
+        <label>Etapa<select name="module" id="moduleSelect" required></select></label>
+        <label>Nome do grupo<input name="group" placeholder="Ex.: Grupo Farol" required></label>
+      </div>
+      <label>Integrantes<textarea name="members" rows="3" placeholder="Nome e Nº USP, um por linha" required></textarea></label>
+      <label>Link dos slides no Drive<input name="slides" type="url" placeholder="https://drive.google.com/..."></label>
+      <div class="dialog-actions"><button class="text-button" type="button" data-close="presentationDialog">Cancelar</button><button class="primary-button" type="submit" value="default">Reservar apresentação</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog upload-dialog" id="uploadDialog">
+    <form class="dialog-card wide" id="uploadForm" enctype="multipart/form-data">
+      <button class="dialog-close" type="button" data-close="uploadDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow">Envio para a disciplina</span>
+      <h2>Entregar material</h2>
+      <p>Envie slides, resenha ou material de apoio. A professora verá o arquivo, o aluno e a aula vinculada no painel.</p>
+      <div class="form-columns">
+        <label>Aula<select name="session_id" id="uploadSessionSelect" required></select></label>
+        <label>Artigo relacionado<select name="article_id" id="uploadArticleSelect"><option value="">Material geral da aula</option></select></label>
+      </div>
+      <label>Arquivo<input name="file" type="file" required accept=".pdf,.ppt,.pptx,.doc,.docx,.odt,.odp,.xls,.xlsx,.csv,.zip"></label>
+      <label>Descrição<textarea name="description" rows="3" placeholder="Ex.: slides finais do Grupo Farol"></textarea></label>
+      <p class="upload-note">Tamanho máximo: 25 MB.</p>
+      <p class="form-error" id="uploadError" role="alert"></p>
+      <div class="upload-progress" id="uploadProgress" hidden><span></span><p>Enviando material…</p></div>
+      <div class="dialog-actions"><button class="text-button" type="button" data-close="uploadDialog">Cancelar</button><button class="primary-button" type="submit">Enviar material</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

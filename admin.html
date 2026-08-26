@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071522">
+  <title>Painel da professora · Rota da Disciplina</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="admin-page">
+  <a class="skip-link" href="#adminContent">Pular para o conteúdo</a>
+  <div class="page-noise" aria-hidden="true"></div>
+
+  <div class="admin-shell">
+    <aside class="admin-sidebar">
+      <a class="wordmark" href="index.html" aria-label="Rota da Disciplina, área do aluno">
+        <img class="epusp-seal" src="assets/epusp-logo.webp" alt="" width="44" height="44">
+        <span>Rota<br>da disciplina</span>
+      </a>
+      <div class="admin-profile">
+        <span class="admin-avatar">LR</span>
+        <div><strong>Profa. Lídia Rebello Dias</strong><small>Administradora · PEA/EPUSP</small></div>
+      </div>
+      <nav class="admin-nav" aria-label="Seções do painel">
+        <a class="active" href="#visao"><span aria-hidden="true">◈</span>Visão geral</a>
+        <a href="#informacoes"><span aria-hidden="true">≡</span>Informações</a>
+        <a href="#drive"><span aria-hidden="true">↻</span>Google Drive</a>
+        <a href="#agenda"><span aria-hidden="true">◷</span>Agenda das aulas</a>
+        <a href="#etapas"><span aria-hidden="true">∿</span>Trilha de conteúdos</a>
+        <a href="#alunos"><span aria-hidden="true">◎</span>Alunos e acesso</a>
+        <a href="#entregas"><span aria-hidden="true">↗</span>Apresentações</a>
+        <a href="#materiais-enviados"><span aria-hidden="true">⇧</span>Materiais enviados</a>
+      </nav>
+      <div class="sidebar-foot"><a href="index.html" id="studentViewLink">Abrir área do aluno ↗</a></div>
+    </aside>
+
+    <main class="admin-main" id="adminContent">
+      <header class="admin-topbar">
+        <p class="admin-breadcrumb">Painel docente / <strong id="breadcrumbCode">PEA5004</strong></p>
+        <div class="admin-top-actions">
+          <button class="admin-button" id="previewButton">Visualizar como aluno</button>
+          <button class="admin-button primary" id="saveButton">Salvar alterações</button>
+        </div>
+      </header>
+
+      <div class="admin-content">
+        <section class="admin-welcome" id="visao">
+          <div><span class="eyebrow">Gestão das disciplinas</span><h1>Bom trabalho, professora.</h1></div>
+          <p>Edite a rota, conecte a pasta do Drive e controle quem pode acessar. As mudanças salvas aparecem na área do aluno deste protótipo.</p>
+        </section>
+
+        <section aria-label="Disciplinas cadastradas">
+          <div class="course-tabs" id="courseTabs"></div>
+          <button class="admin-button" id="newCourseButton">+ Cadastrar nova disciplina</button>
+        </section>
+
+        <section class="metric-grid" id="metricGrid" aria-label="Indicadores da disciplina">
+          <article class="metric"><small>Alunos com acesso</small><strong id="studentMetric">0</strong><span id="studentMetricDetail">lista atual</span></article>
+          <article class="metric"><small>Aulas agendadas</small><strong id="moduleMetric">0</strong><span id="moduleMetricDetail">próxima aula</span></article>
+          <article class="metric"><small>Itens no Drive</small><strong id="driveMetric">0</strong><span id="driveMetricDetail">sincronizados</span></article>
+          <article class="metric"><small>Materiais recebidos</small><strong id="submissionMetric">0</strong><span id="submissionMetricDetail">arquivos enviados</span></article>
+        </section>
+
+        <div class="admin-grid">
+          <div>
+            <section class="admin-panel" id="informacoes">
+              <header class="panel-heading"><div><h2>Informações da disciplina</h2><p>Título, ementa e apresentação que o aluno vê.</p></div><span class="eyebrow" id="courseStatusLabel">Publicada</span></header>
+              <div class="panel-body">
+                <div class="course-cover-editor" id="courseCoverEditor">
+                  <div class="cover-editor-copy"><small id="coverCode">PEA5004</small><strong id="coverTitle">Monitoramento e segurança portuária</strong></div>
+                </div>
+                <form class="editor-grid" id="courseForm">
+                  <label class="admin-field">Código<input name="code" required maxlength="12" readonly></label>
+                  <label class="admin-field">Semestre<input name="semester" required></label>
+                  <label class="admin-field full">Nome completo<input name="title" required></label>
+                  <label class="admin-field full">Nome curto<input name="shortTitle" required></label>
+                  <label class="admin-field full">Frase de abertura<textarea name="description" rows="2" required></textarea></label>
+                  <label class="admin-field full">Ementa<textarea name="ementa" rows="5" required></textarea></label>
+                  <label class="admin-field">Dia e horário<input name="classDay"></label>
+                  <label class="admin-field">Sala<input name="room"></label>
+                  <label class="admin-field full">URL da capa<input name="cover" placeholder="assets/course-pea5004.webp"></label>
+                  <label class="admin-field">Estado<select name="status"><option>Rascunho</option><option>Publicada</option><option>Arquivada</option></select></label>
+                  <label class="admin-field">Visibilidade<select name="visibility"><option>Somente alunos cadastrados</option><option>Link da turma</option><option>Pública</option></select></label>
+                </form>
+              </div>
+            </section>
+
+            <section class="admin-panel" id="agenda">
+              <header class="panel-heading"><div><h2>Agenda das aulas</h2><p>Data, pauta, especialista e o segundo momento com os artigos dos alunos.</p></div><button class="admin-button" id="addClassButton">+ Nova aula</button></header>
+              <div class="admin-list class-admin-list" id="classAdminList"></div>
+            </section>
+
+            <section class="admin-panel" id="etapas">
+              <header class="panel-heading"><div><h2>Trilha de conteúdos</h2><p>Organize a sequência conceitual que acompanha a agenda do semestre.</p></div><button class="admin-button" id="addModuleButton">+ Nova etapa</button></header>
+              <div class="admin-list" id="moduleAdminList"></div>
+            </section>
+
+            <section class="admin-panel" id="alunos">
+              <header class="panel-heading"><div><h2>Alunos e acesso</h2><p>Somente combinações cadastradas de e-mail e Nº USP podem entrar.</p></div><button class="admin-button" id="importStudentsButton">Importar planilha</button></header>
+              <div class="panel-body" style="padding:0;overflow-x:auto">
+                <table class="student-table">
+                  <thead><tr><th>Aluno</th><th>E-mail</th><th>Nº USP</th><th>Grupo</th><th>Acesso</th><th></th></tr></thead>
+                  <tbody id="studentRows"></tbody>
+                </table>
+              </div>
+              <form class="inline-form" id="studentForm">
+                <input name="name" aria-label="Nome do aluno" placeholder="Nome do aluno" required>
+                <input name="email" aria-label="E-mail USP" type="email" placeholder="email@usp.br" required>
+                <input name="nusp" aria-label="Número USP" inputmode="numeric" placeholder="Nº USP" required pattern="[0-9]{7,10}">
+                <button class="admin-button primary" type="submit">Adicionar</button>
+              </form>
+            </section>
+
+            <section class="admin-panel" id="entregas">
+              <header class="panel-heading"><div><h2>Apresentações reservadas</h2><p>Grupos cadastrados pelos alunos na área da disciplina.</p></div></header>
+              <div class="admin-list" id="submissionList"></div>
+            </section>
+
+            <section class="admin-panel" id="materiais-enviados">
+              <header class="panel-heading"><div><h2>Materiais enviados</h2><p>Arquivos entregues pelos alunos, vinculados à aula e ao artigo.</p></div><span class="eyebrow" id="uploadCountLabel">0 arquivos</span></header>
+              <div class="admin-list" id="uploadAdminList"></div>
+            </section>
+          </div>
+
+          <aside>
+            <section class="admin-panel drive-card" id="drive">
+              <header class="panel-heading"><div><h2>Google Drive</h2><p>Fonte dos materiais da disciplina.</p></div><span class="eyebrow" id="driveStatusLabel">Conectado</span></header>
+              <div class="panel-body">
+                <div class="drive-state">
+                  <span class="drive-state-icon" aria-hidden="true">↻</span>
+                  <div><strong id="driveStateTitle">Pasta sincronizada</strong><small id="driveStateDetail">lidia.rebello.dias@usp.br</small></div>
+                </div>
+                <label class="admin-field" style="margin-top:17px;color:rgba(255,255,255,.58)">Link da pasta principal<input id="driveUrlInput" type="url" placeholder="https://drive.google.com/drive/folders/..." style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.18)"></label>
+                <div class="drive-folders" id="driveFolderList"></div>
+                <button class="admin-button" id="syncDriveButton">Sincronizar agora</button>
+              </div>
+            </section>
+
+            <section class="admin-panel">
+              <header class="panel-heading"><div><h2>Publicação</h2><p>Estado da experiência do aluno.</p></div></header>
+              <div class="panel-body">
+                <div class="drive-state" style="border-color:var(--line)">
+                  <span class="drive-state-icon" style="color:var(--teal-deep);border-color:rgba(24,141,135,.3)" aria-hidden="true">◎</span>
+                  <div><strong id="publishState">Disciplina publicada</strong><small id="publishDetail" style="color:#769096">Somente alunos cadastrados</small></div>
+                </div>
+                <button class="admin-button" id="togglePublishButton" style="width:100%;margin-top:17px">Alternar publicação</button>
+              </div>
+            </section>
+
+            <section class="admin-panel">
+              <header class="panel-heading"><div><h2>Persistência</h2><p>Agenda, turma e arquivos salvos no SQLite.</p></div></header>
+              <div class="panel-body">
+                <p style="margin:0 0 15px;color:#71898f;font-size:11px">O conteúdo editorial da trilha também possui uma cópia local de apoio. Esta ação não apaga aulas, alunos ou materiais do banco.</p>
+                <button class="admin-button" id="resetButton" style="width:100%">Recarregar conteúdo editorial</button>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <dialog class="app-dialog" id="moduleDialog">
+    <form class="dialog-card" id="moduleForm">
+      <button class="dialog-close" type="button" data-close="moduleDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow">Nova etapa da trilha</span>
+      <h2>Criar etapa</h2>
+      <div class="form-columns"><label>Título<input name="title" required></label><label>Categoria<input name="kicker" placeholder="Ex.: Sensores" required></label></div>
+      <label>Resumo<textarea name="summary" rows="3" required></textarea></label>
+      <div class="form-columns"><label>Data<input name="date" placeholder="02 set."></label><label>Quantidade de artigos<input name="articles" type="number" min="0" value="1"></label></div>
+      <div class="dialog-actions"><button class="text-button" type="button" data-close="moduleDialog">Cancelar</button><button class="primary-button" type="submit">Criar etapa</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog" id="newCourseDialog">
+    <form class="dialog-card" id="newCourseForm">
+      <button class="dialog-close" type="button" data-close="newCourseDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow">Nova disciplina</span>
+      <h2>Criar uma nova rota</h2>
+      <div class="form-columns"><label>Código<input name="code" placeholder="PEA0000" required maxlength="12"></label><label>Semestre<input name="semester" placeholder="1º semestre de 2027" required></label></div>
+      <label>Nome da disciplina<input name="title" required></label>
+      <label>Link da pasta no Drive<input name="driveUrl" type="url" placeholder="https://drive.google.com/drive/folders/..."></label>
+      <div class="dialog-actions"><button class="text-button" type="button" data-close="newCourseDialog">Cancelar</button><button class="primary-button" type="submit">Criar disciplina</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog class-dialog" id="classDialog">
+    <div class="dialog-card wide">
+      <button class="dialog-close" type="button" data-close="classDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow">Agenda da disciplina</span>
+      <h2 id="classDialogTitle">Nova aula</h2>
+      <form id="classForm" class="class-form-grid">
+        <input name="session_id" type="hidden">
+        <div class="form-columns"><label>Data<input name="session_date" type="date" required></label><label>Horário<input name="start_time" type="time" value="14:00" required></label></div>
+        <label>Título da aula<input name="title" required></label>
+        <label>Tema do dia<input name="theme" placeholder="Ex.: Panorama de riscos integrados"></label>
+        <label>Local<input name="location" placeholder="PEA · Sala A2-06"></label>
+        <div class="class-moment-label"><span>1º momento</span><strong>Profissional convidado</strong></div>
+        <div class="form-columns"><label>Nome do especialista<input name="specialist_name"></label><label>Cargo / instituição<input name="specialist_role"></label></div>
+        <label>Temática da apresentação<textarea name="specialist_topic" rows="2"></textarea></label>
+        <label>Observações<textarea name="notes" rows="2"></textarea></label>
+        <div class="dialog-actions"><button class="text-button" type="button" data-close="classDialog">Cancelar</button><button class="primary-button" type="submit">Salvar aula</button></div>
+      </form>
+
+      <section class="article-manager" id="articleManager" hidden>
+        <header><div class="class-moment-label"><span>2º momento</span><strong>Artigos apresentados pelos alunos</strong></div><p>Vincule cada leitura aos alunos que farão a apresentação.</p></header>
+        <div class="managed-article-list" id="managedArticleList"></div>
+        <form id="articleForm" class="article-form">
+          <div class="form-columns"><label>Código<input name="code" placeholder="A01"></label><label>Autoria<input name="author" placeholder="Sobrenome et al."></label></div>
+          <label>Título do artigo<input name="title" required></label>
+          <label>Link do artigo<input name="url" type="url" placeholder="https://..."></label>
+          <fieldset class="presenter-fieldset"><legend>Alunos apresentadores</legend><div id="presenterChecks" class="presenter-checks"></div></fieldset>
+          <button class="admin-button primary" type="submit">Adicionar artigo à aula</button>
+        </form>
+      </section>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
