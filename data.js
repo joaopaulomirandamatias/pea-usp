@@ -2,7 +2,7 @@
   const STORAGE_KEY = 'rota-disciplinas-v1';
 
   const seed = {
-    version: 1,
+    version: 2,
     courses: [
       {
         code: 'PEA5004',
@@ -12,8 +12,9 @@
         status: 'Publicada',
         visibility: 'Somente alunos cadastrados',
         progress: 38,
-        credits: 4,
-        workload: '60 h',
+        credits: 8,
+        workload: '120 h',
+        catalogUrl: 'https://uspdigital.usp.br/janus/componente/catalogoDisciplinasInicial.jsf?action=3&sgldis=PEA5004',
         classDay: 'Quartas · 14h',
         room: 'PEA · Sala A2-06',
         professor: 'Profa. Dra. Lídia Rebello Dias',
@@ -23,13 +24,13 @@
         driveUrl: '',
         driveConnected: false,
         driveEmail: 'lidia.rebello.dias@usp.br',
-        description: 'Uma jornada pelos sistemas que mantêm pessoas, cargas e ecossistemas seguros em terminais que nunca param.',
-        ementa: 'Sistemas de monitoramento e supervisão aplicados a ambientes portuários. Sensores, CFTV inteligente, controle de acesso, redes de comunicação crítica, centros integrados de controle, cibersegurança e monitoramento ambiental. Estudos de caso e discussão de artigos científicos com profissionais do setor.',
+        description: 'Apresentar os sistemas de segurança e monitoramento para as áreas ambiental e operacional dos portos sob os enfoques público e privado, conectando automação, competitividade e inovação portuária.',
+        ementa: '[1] Metodologia científica e publicação em artigo.\n[2] Atividades de inovação no setor portuário.\n[3] Gestão e modelagem de processos, PMBOK e metodologias ágeis.\n[4] Equipamentos e sistemas de mobilidade aplicados à segurança.\n[5] Sistema Portuário Brasileiro e Port Community System (PCS).\n[6] Proteção e transferência de dados na Administração Pública, LAI e LGPD.\n[7] Sistemas de gestão e gerenciamento de riscos em portos e instalações portuárias.\n[8] Automação de sistemas de transporte, logísticos, ambientais e portuários.\n[9] Sistemas de gestão de terminais de contêineres.\n[10] ISPS Code e sua aplicação.',
         objectives: [
-          'Ler uma operação portuária como um sistema sociotécnico integrado.',
-          'Selecionar sensores, redes e arquiteturas para diferentes cenários de risco.',
-          'Avaliar impactos de segurança pública, privada e ambiental.',
-          'Comunicar uma análise técnica com evidências e clareza.'
+          'Compreender os sistemas de segurança e monitoramento ambiental e operacional dos portos.',
+          'Relacionar automação, inovação e competitividade do sistema portuário.',
+          'Analisar aplicações públicas e privadas de gestão de riscos, dados e segurança.',
+          'Desenvolver e comunicar pesquisa científica aplicada ao setor.'
         ],
         folders: [
           { name: '01. Sobre o curso', detail: 'Ementa, critérios e cronograma', count: 4 },
@@ -70,14 +71,15 @@
       },
       {
         code: 'PEA5003',
-        title: 'Componentes de Automação em ITS',
+        title: 'Componentes de Automação em ITS - Sistemas Inteligentes de Transportes',
         shortTitle: 'Componentes de automação em ITS',
         semester: '1º semestre de 2027',
         status: 'Rascunho',
         visibility: 'Somente alunos cadastrados',
         progress: 0,
-        credits: 4,
-        workload: '60 h',
+        credits: 8,
+        workload: '120 h',
+        catalogUrl: 'https://uspdigital.usp.br/janus/componente/catalogoDisciplinasInicial.jsf?action=3&sgldis=PEA5003',
         classDay: 'Terças · 14h',
         room: 'PEA · Sala B1-02',
         professor: 'Profa. Dra. Lídia Rebello Dias',
@@ -87,9 +89,9 @@
         driveUrl: 'https://drive.google.com/drive/folders/1Z6EvnGAYkvGZZKKyOVzmxDa0AjveNKFz',
         driveConnected: true,
         driveEmail: 'lidia.rebello.dias@usp.br',
-        description: 'Os componentes que fazem uma via perceber, decidir e responder em tempo real.',
-        ementa: 'Sensores, controladores, comunicação veicular, semáforos inteligentes, sistemas de supervisão e integração de dados aplicados a Sistemas Inteligentes de Transporte.',
-        objectives: ['Reconhecer a arquitetura de um ITS.', 'Comparar tecnologias de sensoriamento viário.', 'Projetar integrações seguras e interoperáveis.'],
+        description: 'Apresentar os principais componentes de automação envolvidos nos processos da cadeia logística: infraestrutura tecnológica, componentes embarcados e de comunicação, normatizações e estudos de caso do Gaesi/EPUSP.',
+        ementa: '[1] Metodologia científica.\n[2] Cidades inteligentes e componentes tecnológicos.\n[3] Integração de informação para a mobilidade urbana.\n[4] Gestão por processos de negócios para centros integrados de mobilidade.\n[5] Transporte sustentável.\n[6] Análise de risco.\n[7] Casos de rastreabilidade de combustível, SAT e zeladoria urbana.',
+        objectives: ['Compreender a infraestrutura tecnológica da cadeia logística.', 'Analisar componentes embarcados e de comunicação.', 'Relacionar automação, normatização, segurança, custo e desempenho operacional.'],
         folders: [
           { name: '01. Plano de ensino', detail: 'Ementa e cronograma', count: 3 },
           { name: '02. Componentes', detail: 'Datasheets e guias', count: 14 },
@@ -113,14 +115,15 @@
       },
       {
         code: 'PEA5714',
-        title: 'Automação de Sistemas Industriais e Portuários',
+        title: 'Automação Sistemas Industriais e Portuários',
         shortTitle: 'Automação industrial e portuária',
         semester: '1º semestre de 2026',
         status: 'Arquivada',
         visibility: 'Somente alunos cadastrados',
         progress: 100,
-        credits: 4,
-        workload: '60 h',
+        credits: 8,
+        workload: '120 h',
+        catalogUrl: 'https://uspdigital.usp.br/janus/componente/catalogoDisciplinasInicial.jsf?action=3&sgldis=PEA5714',
         classDay: 'Quintas · 16h',
         room: 'PEA · Sala A1-04',
         professor: 'Profa. Dra. Lídia Rebello Dias',
@@ -130,9 +133,9 @@
         driveUrl: 'https://drive.google.com/drive/folders/11BmJQxhewM4_X3u4yks6lKbxnWUIb7BG',
         driveConnected: true,
         driveEmail: 'lidia.rebello.dias@usp.br',
-        description: 'Da máquina ao terminal: controle, supervisão e integração de operações industriais complexas.',
-        ementa: 'Arquiteturas de automação, PLC, SCADA, redes industriais, sistemas de movimentação e integração de operações industriais e portuárias.',
-        objectives: ['Modelar sistemas industriais.', 'Estruturar controle e supervisão.', 'Avaliar disponibilidade e segurança operacional.'],
+        description: 'Apresentar os setores portuário e industrial brasileiros, seus atores, desafios e oportunidades com foco em automação de processos, ambiente regulatório, tecnologias emergentes e legadas e gestão de riscos.',
+        ementa: '[1] Conceitos da pesquisa científica.\n[2] Ferramentas de automação no comércio exterior via portos.\n[3] Operador Econômico Autorizado (OEA).\n[4] Meio ambiente, saúde e segurança em ambientes portuários.\n[5] Modelo de logística portuária.\n[6] Análise e gestão de risco na automação industrial e portuária.\n[7] Tecnologias legadas e emergentes.\n[8] Estudos de caso.',
+        objectives: ['Compreender o funcionamento dos setores industrial e portuário brasileiros.', 'Analisar modelos e tecnologias viabilizadoras de automação.', 'Comparar padrões, regulações e estratégias de gestão de riscos.'],
         folders: [
           { name: '01. Curso', detail: 'Plano e cronograma', count: 4 },
           { name: '02. Aulas', detail: 'Slides e laboratórios', count: 24 },
@@ -164,7 +167,19 @@
   function load() {
     try {
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (stored && stored.version === seed.version && Array.isArray(stored.courses)) return stored;
+      if (stored && Array.isArray(stored.courses)) {
+        const catalogFields = ['title', 'shortTitle', 'description', 'ementa', 'objectives', 'credits', 'workload', 'catalogUrl'];
+        stored.courses.forEach((localCourse) => {
+          const catalogCourse = seed.courses.find((item) => item.code === localCourse.code);
+          if (catalogCourse) catalogFields.forEach((field) => { localCourse[field] = clone(catalogCourse[field]); });
+        });
+        seed.courses.forEach((catalogCourse) => {
+          if (!stored.courses.some((item) => item.code === catalogCourse.code)) stored.courses.push(clone(catalogCourse));
+        });
+        stored.version = seed.version;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+        return stored;
+      }
     } catch (error) {
       console.warn('Não foi possível carregar os dados locais.', error);
     }

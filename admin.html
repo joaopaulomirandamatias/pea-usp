@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="admin-page admin-locked">
+<body class="admin-page admin-locked" data-admin-active-view="visao">
   <a class="skip-link" href="#adminContent">Pular para o conteúdo</a>
   <div class="page-noise" aria-hidden="true"></div>
 
@@ -21,10 +21,11 @@
         <img class="epusp-seal" src="assets/epusp-logo.webp" alt="" width="44" height="44">
         <span>Rota<br>da disciplina</span>
       </a>
-      <div class="admin-profile">
+      <a class="admin-profile" id="teacherProfileLink" href="profile.html?role=teacher&amp;curso=PEA5004" aria-label="Abrir perfil da professora">
         <span class="admin-avatar" id="teacherInitials">ML</span>
         <div><strong id="teacherName">Profa. Maria Lídia</strong><small>Administradora · PEA/EPUSP</small></div>
-      </div>
+        <span class="admin-profile-arrow" aria-hidden="true">→</span>
+      </a>
       <nav class="admin-nav" aria-label="Seções do painel">
         <a class="active" href="#visao" data-admin-route="visao"><span aria-hidden="true">◈</span>Visão geral</a>
         <a href="#disciplinas" data-admin-route="disciplinas"><span aria-hidden="true">≡</span>Disciplinas</a>
@@ -49,12 +50,7 @@
       <div class="admin-content">
         <section class="admin-welcome" id="visao" data-admin-view="visao">
           <div><span class="eyebrow">Gestão das disciplinas</span><h1>Bom trabalho, professora.</h1></div>
-          <p>Edite a rota, conecte a pasta do Drive e controle quem pode acessar. As mudanças salvas aparecem na área do aluno deste protótipo.</p>
-        </section>
-
-        <section aria-label="Disciplinas cadastradas" data-admin-view="visao disciplinas aulas pessoas conteudo configuracoes">
-          <div class="course-tabs" id="courseTabs"></div>
-          <button class="admin-button" id="newCourseButton">+ Cadastrar nova disciplina</button>
+          <p>Um panorama do semestre para decidir o que precisa de atenção agora — das turmas à próxima aula.</p>
         </section>
 
         <section class="metric-grid" id="metricGrid" aria-label="Indicadores da disciplina" data-admin-view="visao">
@@ -62,6 +58,22 @@
           <article class="metric"><small>Aulas agendadas</small><strong id="moduleMetric">0</strong><span id="moduleMetricDetail">próxima aula</span></article>
           <article class="metric"><small>Itens no Drive</small><strong id="driveMetric">0</strong><span id="driveMetricDetail">sincronizados</span></article>
           <article class="metric"><small>Materiais recebidos</small><strong id="submissionMetric">0</strong><span id="submissionMetricDetail">arquivos enviados</span></article>
+        </section>
+
+        <section class="admin-course-browser" aria-label="Disciplinas cadastradas" data-admin-view="visao disciplinas aulas pessoas conteudo configuracoes">
+          <header class="course-browser-heading" data-admin-view="visao">
+            <div><span class="eyebrow">Portfólio docente</span><h2>Disciplinas</h2><p>Selecione uma turma para atualizar todo o painel.</p></div>
+            <button class="admin-button" id="newCourseButton">+ Cadastrar nova disciplina</button>
+          </header>
+          <div class="course-tabs" id="courseTabs"></div>
+        </section>
+
+        <section class="overview-agenda" id="overviewAgenda" aria-labelledby="overviewAgendaHeading" data-admin-view="visao">
+          <header class="overview-agenda-heading">
+            <div><span class="eyebrow" id="overviewAgendaKicker">Agenda operacional</span><h2 id="overviewAgendaHeading">Aula em destaque</h2></div>
+            <p id="overviewAgendaSummary">Carregando a agenda da disciplina…</p>
+          </header>
+          <div class="overview-agenda-board" id="overviewAgendaBoard" aria-live="polite"></div>
         </section>
 
         <div class="admin-grid">
@@ -84,6 +96,7 @@
                   <label class="admin-field full">Nome curto<input name="shortTitle" required></label>
                   <label class="admin-field full">Frase de abertura<textarea name="description" rows="2" required></textarea></label>
                   <label class="admin-field full">Ementa<textarea name="ementa" rows="5" required></textarea></label>
+                  <a class="catalog-source-link full" id="catalogSourceLink" href="#" target="_blank" rel="noopener noreferrer">Consultar cadastro oficial no Janus/USP ↗</a>
                   <label class="admin-field">Dia e horário<input name="classDay"></label>
                   <label class="admin-field">Sala<input name="room"></label>
                   <label class="admin-field full">URL da capa<input name="cover" placeholder="assets/course-pea5004.webp"></label>
@@ -175,7 +188,7 @@
               </div>
             </section>
 
-            <section class="admin-panel" data-admin-view="configuracoes">
+            <section class="admin-panel" data-admin-view="configuracoes" id="publicationPanel">
               <header class="panel-heading"><div><h2>Publicação</h2><p>Estado da experiência do aluno.</p></div></header>
               <div class="panel-body">
                 <div class="drive-state" style="border-color:var(--line)">
@@ -186,7 +199,7 @@
               </div>
             </section>
 
-            <section class="admin-panel" data-admin-view="configuracoes">
+            <section class="admin-panel" data-admin-view="configuracoes" id="persistencePanel">
               <header class="panel-heading"><div><h2>Persistência</h2><p>Agenda, turma e arquivos salvos no SQLite.</p></div></header>
               <div class="panel-body">
                 <p style="margin:0 0 15px;color:#71898f;font-size:11px">O conteúdo editorial da trilha também possui uma cópia local de apoio. Esta ação não apaga aulas, alunos ou materiais do banco.</p>

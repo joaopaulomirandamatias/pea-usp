@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071522">
+  <title>Meu perfil · Rota da Disciplina</title>
+  <link rel="icon" href="assets/epusp-logo.webp" type="image/webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="profile-page">
+  <div class="page-noise" aria-hidden="true"></div>
+  <header class="profile-header">
+    <a class="wordmark" href="index.html" aria-label="Rota da Disciplina">
+      <img class="epusp-seal" src="assets/epusp-logo.webp" alt="" width="44" height="44">
+      <span>Rota<br>da disciplina</span>
+    </a>
+    <span class="profile-header-label">Identidade e acesso · PEA/EPUSP</span>
+    <a class="admin-button" id="profileBackLink" href="index.html">Voltar</a>
+  </header>
+
+  <main class="profile-shell">
+    <section class="profile-intro">
+      <div><span class="eyebrow" id="profileRoleKicker">Área pessoal</span><h1>Meu perfil.</h1></div>
+      <p>Atualize os dados que identificam você na disciplina e mantenha sua forma de acesso sob controle.</p>
+    </section>
+
+    <section class="profile-gate" id="profileGate" hidden>
+      <span aria-hidden="true">◎</span>
+      <div><strong>Sua sessão não está disponível.</strong><p id="profileGateCopy">Entre novamente para abrir o perfil.</p></div>
+      <a class="primary-button" id="profileLoginLink" href="index.html">Ir para o acesso</a>
+    </section>
+
+    <div class="profile-workspace" id="profileWorkspace" hidden>
+      <aside class="profile-identity-card">
+        <span class="profile-avatar-large" id="profileInitials">—</span>
+        <small id="profileRoleLabel">Perfil</small>
+        <h2 id="profileDisplayName">Carregando…</h2>
+        <p id="profileScope">PEA · USP</p>
+        <dl>
+          <div><dt>Sessão</dt><dd>12 horas</dd></div>
+          <div><dt>Proteção</dt><dd>Token individual</dd></div>
+        </dl>
+      </aside>
+
+      <div class="profile-forms">
+        <section class="profile-panel" id="teacherProfilePanel" hidden>
+          <header><div><span class="eyebrow">Dados da professora</span><h2>Identidade docente</h2></div><span class="profile-status">SQLite</span></header>
+          <form id="teacherProfileForm" class="profile-form-grid">
+            <label class="admin-field profile-full">Nome exibido<input name="name" required minlength="3"></label>
+            <label class="admin-field">Usuário<input name="username" required pattern="[a-zA-Z0-9._-]{3,60}"></label>
+            <label class="admin-field">E-mail<input name="email" type="email"></label>
+            <p class="profile-form-message profile-full" id="teacherProfileMessage" role="status"></p>
+            <button class="admin-button primary" type="submit">Salvar dados do perfil</button>
+          </form>
+        </section>
+
+        <section class="profile-panel" id="teacherPasswordPanel" hidden>
+          <header><div><span class="eyebrow">Segurança</span><h2>Trocar minha senha</h2></div><span class="profile-status">Conta docente</span></header>
+          <form id="teacherPasswordForm" class="profile-form-grid">
+            <label class="admin-field profile-full">Senha atual<input name="current_password" type="password" autocomplete="current-password" required></label>
+            <label class="admin-field">Nova senha<input name="new_password" type="password" autocomplete="new-password" minlength="10" required></label>
+            <label class="admin-field">Repita a nova senha<input name="confirm_password" type="password" autocomplete="new-password" minlength="10" required></label>
+            <p class="profile-form-hint profile-full">Use ao menos 10 caracteres, combinando letras e números.</p>
+            <p class="profile-form-message profile-full" id="teacherPasswordMessage" role="status"></p>
+            <button class="admin-button primary" type="submit">Atualizar senha</button>
+          </form>
+        </section>
+
+        <section class="profile-panel" id="studentProfilePanel" hidden>
+          <header><div><span class="eyebrow">Dados do aluno</span><h2>Identidade na turma</h2></div><span class="profile-status" id="studentCourseLabel">Disciplina</span></header>
+          <form id="studentProfileForm" class="profile-form-grid">
+            <label class="admin-field profile-full">Nome completo<input name="name" required minlength="3"></label>
+            <label class="admin-field">E-mail<input name="email" type="email" required></label>
+            <label class="admin-field">Número USP<input name="nusp" inputmode="numeric" pattern="[0-9]{7,10}" required></label>
+            <label class="admin-field profile-full">Grupo<input name="group_name" maxlength="120"></label>
+            <p class="profile-form-message profile-full" id="studentProfileMessage" role="status"></p>
+            <button class="admin-button primary" type="submit">Salvar dados do perfil</button>
+          </form>
+        </section>
+
+        <section class="profile-panel profile-credential-panel" id="studentCredentialPanel" hidden>
+          <header><div><span class="eyebrow">Senha da disciplina</span><h2>Trocar token de acesso</h2></div><span class="profile-status">Credencial pessoal</span></header>
+          <div class="profile-credential-body">
+            <p>O token funciona como sua senha nesta disciplina. Ao gerar outro, guarde-o em local seguro e descarte o anterior.</p>
+            <button class="admin-button primary" id="rotateStudentToken" type="button">Gerar novo token</button>
+            <div class="profile-secret" id="studentTokenReveal" hidden><small>Novo token — copie agora</small><code id="studentTokenValue"></code><button class="admin-button" id="copyStudentToken" type="button">Copiar token</button></div>
+            <p class="profile-form-message" id="studentTokenMessage" role="status"></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="profile.js"></script>
+</body>
+</html>

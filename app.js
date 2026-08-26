@@ -288,6 +288,9 @@
         room: remoteCourse.room || course.room,
         professor: remoteCourse.professor_name || course.professor,
         cover: remoteCourse.cover || course.cover,
+        credits: remoteCourse.credits || course.credits,
+        workload: remoteCourse.workload || course.workload,
+        catalogUrl: remoteCourse.catalog_url || course.catalogUrl,
       });
       course.driveUrl = remoteCourse.drive_url || course.driveUrl;
       course.driveConnected = Boolean(remoteCourse.drive_connected);
@@ -333,17 +336,18 @@
             title: item.title, shortTitle: item.short_title, semester: item.semester,
             status: item.status, visibility: item.visibility, updatedAt: item.updated_at,
             cover: item.cover || existing.cover, driveUrl: item.drive_url,
-            driveConnected: Boolean(item.drive_connected)
+            driveConnected: Boolean(item.drive_connected), credits: item.credits || existing.credits,
+            workload: item.workload || existing.workload, catalogUrl: item.catalog_url || existing.catalogUrl
           });
           return;
         }
         state.courses.push({
           code: item.code, title: item.title, shortTitle: item.short_title, semester: item.semester,
-          status: item.status, visibility: item.visibility, progress: 0, credits: 4, workload: '60 h',
+          status: item.status, visibility: item.visibility, progress: 0, credits: item.credits || 8, workload: item.workload || '120 h',
           classDay: 'A definir', room: 'A definir', professor: 'Profa. Dra. Lídia Rebello Dias',
           updatedAt: item.updated_at, cover: item.cover || 'assets/course-pea5004.webp', accent: '#56d6ca',
           driveUrl: item.drive_url, driveConnected: Boolean(item.drive_connected),
-          description: 'Uma nova rota de aprendizagem.', ementa: 'Cadastre a ementa desta disciplina.',
+          catalogUrl: item.catalog_url || '', description: item.description || 'Uma nova rota de aprendizagem.', ementa: item.ementa || 'Cadastre a ementa desta disciplina.',
           objectives: ['Cadastrar o primeiro objetivo.'], folders: [], modules: [], readings: [],
           presentationTips: ['Abra com o problema.'], students: [], submissions: []
         });
@@ -465,6 +469,8 @@
     const studentName = currentStudent?.name || sessionStorage.getItem(`${authKey()}-name`);
     setText('#accessLabel', logged ? (studentName || 'Aluno conectado') : 'Acessar a turma');
     $('#accessButton').setAttribute('aria-label', logged ? 'Sessão de aluno ativa' : 'Entrar com token da disciplina');
+    $('#studentProfileLink').hidden = !logged;
+    $('#studentProfileLink').href = `profile.html?role=student&curso=${encodeURIComponent(course.code)}`;
     setText('#accessCourseCode', course.code);
     setText('#accessScope', course.code);
     if ($('#gradesLocked')) renderGrades();
@@ -518,7 +524,7 @@
 
   function openAccess() {
     if (isAuthenticated()) {
-      showToast(`Credencial ativa em ${course.code} por até 12 horas.`);
+      window.location.href = `profile.html?role=student&curso=${encodeURIComponent(course.code)}`;
       return;
     }
     $('#accessError').textContent = '';

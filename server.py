@@ -149,6 +149,10 @@ CREATE TABLE IF NOT EXISTS courses (
     class_day TEXT NOT NULL DEFAULT '',
     room TEXT NOT NULL DEFAULT '',
     professor_name TEXT NOT NULL DEFAULT 'Profa. Maria Lídia',
+    credits INTEGER NOT NULL DEFAULT 8,
+    workload TEXT NOT NULL DEFAULT '120 h',
+    catalog_url TEXT NOT NULL DEFAULT '',
+    catalog_professor TEXT NOT NULL DEFAULT '',
     cover TEXT NOT NULL DEFAULT '',
     drive_url TEXT NOT NULL DEFAULT '',
     drive_connected INTEGER NOT NULL DEFAULT 0,
@@ -465,6 +469,53 @@ ARTICLE_SEEDS = {
 }
 
 
+OFFICIAL_COURSE_CATALOG = {
+    "PEA5003": {
+        "title": "Componentes de Automação em ITS - Sistemas Inteligentes de Transportes",
+        "short_title": "Componentes de automação em ITS",
+        "description": "Apresentar os principais componentes de automação envolvidos nos processos da cadeia logística: infraestrutura tecnológica, componentes embarcados e de comunicação, normatizações do setor e estudos de caso desenvolvidos junto ao Gaesi/EPUSP.",
+        "ementa": "[1] Metodologia científica: ferramentas para o desenvolvimento de pesquisa científica.\n[2] Cidades inteligentes: aspectos contextuais, tecnológicos e componentes tecnológicos.\n[3] Integração de informação para a mobilidade urbana.\n[4] Modelo de gestão por processos de negócios para automação de centros integrados de mobilidade urbana.\n[5] Transporte sustentável.\n[6] Análise de risco.\n[7] Casos: rastreabilidade de combustível, aplicações de SAT (Sistema Autenticador e Transmissor) e zeladoria urbana.",
+        "catalog_url": "https://uspdigital.usp.br/janus/componente/catalogoDisciplinasInicial.jsf?action=3&sgldis=PEA5003",
+    },
+    "PEA5004": {
+        "title": "Sistemas de Automação para Monitoramento e Segurança Pública, Privada e Ambiental para Área Portuária",
+        "short_title": "Monitoramento e segurança portuária",
+        "description": "Apresentar os sistemas de segurança e monitoramento para as áreas ambiental e operacional dos portos sob os enfoques público e privado, conectando automação, competitividade e inovação portuária.",
+        "ementa": "[1] Metodologia científica e publicação em artigo.\n[2] Atividades de inovação no setor portuário.\n[3] Gestão e modelagem de processos, PMBOK e metodologias ágeis.\n[4] Equipamentos e sistemas de mobilidade aplicados à segurança.\n[5] Sistema Portuário Brasileiro e Port Community System (PCS).\n[6] Proteção e transferência de dados na Administração Pública, LAI e LGPD.\n[7] Sistemas de gestão e gerenciamento de riscos em portos e instalações portuárias.\n[8] Automação de sistemas de transporte, logísticos, ambientais e portuários.\n[9] Sistemas de gestão de terminais de contêineres.\n[10] ISPS Code e sua aplicação.",
+        "catalog_url": "https://uspdigital.usp.br/janus/componente/catalogoDisciplinasInicial.jsf?action=3&sgldis=PEA5004",
+    },
+    "PEA5714": {
+        "title": "Automação Sistemas Industriais e Portuários",
+        "short_title": "Automação industrial e portuária",
+        "description": "Apresentar o funcionamento dos setores portuário e industrial brasileiros, seus atores, desafios e oportunidades com foco em automação de processos, ambiente regulatório, tecnologias emergentes e legadas e gestão de riscos.",
+        "ementa": "[1] Conceitos da pesquisa científica.\n[2] Ferramentas de automação no comércio exterior via portos.\n[3] Operador Econômico Autorizado (OEA).\n[4] Meio ambiente, saúde e segurança em ambientes portuários.\n[5] Modelo de logística portuária.\n[6] Análise e gestão de risco no contexto da automação de sistemas industriais e portuários.\n[7] Tecnologias legadas e emergentes: aplicações e impactos na indústria e nos portos.\n[8] Estudos de caso.",
+        "catalog_url": "https://uspdigital.usp.br/janus/componente/catalogoDisciplinasInicial.jsf?action=3&sgldis=PEA5714",
+    },
+}
+
+
+def apply_official_catalog(database: sqlite3.Connection) -> None:
+    database.execute("CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    migration_key = "official_catalog_2026_08_26"
+    if database.execute("SELECT 1 FROM app_metadata WHERE key = ?", (migration_key,)).fetchone():
+        return
+    for code, values in OFFICIAL_COURSE_CATALOG.items():
+        database.execute(
+            """
+            UPDATE courses
+            SET title = ?, short_title = ?, description = ?, ementa = ?, credits = 8,
+                workload = '120 h', catalog_url = ?, catalog_professor = 'Eduardo Mario Dias',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE UPPER(code) = ?
+            """,
+            (
+                values["title"], values["short_title"], values["description"],
+                values["ementa"], values["catalog_url"], code,
+            ),
+        )
+    database.execute("INSERT INTO app_metadata (key, value) VALUES (?, ?)", (migration_key, utc_now_iso()))
+
+
 def connect() -> sqlite3.Connection:
     database = sqlite3.connect(DB_PATH)
     database.row_factory = sqlite3.Row
@@ -485,6 +536,10 @@ def initialize_database() -> None:
             "class_day": "TEXT NOT NULL DEFAULT ''",
             "room": "TEXT NOT NULL DEFAULT ''",
             "professor_name": "TEXT NOT NULL DEFAULT 'Profa. Maria Lídia'",
+            "credits": "INTEGER NOT NULL DEFAULT 8",
+            "workload": "TEXT NOT NULL DEFAULT '120 h'",
+            "catalog_url": "TEXT NOT NULL DEFAULT ''",
+            "catalog_professor": "TEXT NOT NULL DEFAULT ''",
             "cover_file": "TEXT NOT NULL DEFAULT ''",
             "public_overview": "INTEGER NOT NULL DEFAULT 1",
             "public_schedule": "INTEGER NOT NULL DEFAULT 1",
@@ -529,6 +584,7 @@ def initialize_database() -> None:
                         "INSERT INTO deliverable_types (course_id, name) VALUES (?, ?)",
                         [(existing_course["id"], name) for name in ("Resenha", "Artigo", "Apresentação", "Artigo final")],
                     )
+            apply_official_catalog(database)
             return
         database.executemany(
             """
@@ -589,6 +645,7 @@ def initialize_database() -> None:
                     "INSERT OR IGNORE INTO article_presenters (article_id, student_id) VALUES (?, ?)",
                     (article_id, student_id),
                 )
+        apply_official_catalog(database)
 
 
 def row_dict(row: sqlite3.Row | None) -> dict | None:
@@ -1378,6 +1435,9 @@ class RotaHandler(SimpleHTTPRequestHandler):
         if path == "/api/admin/login":
             self.login_admin()
             return
+        if path == "/api/student/token":
+            self.rotate_own_student_token()
+            return
         if path == "/api/admin/openai/key":
             self.configure_openai_key()
             return
@@ -1445,6 +1505,12 @@ class RotaHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/admin/password":
             self.update_teacher_password()
+            return
+        if path == "/api/admin/profile":
+            self.update_teacher_profile()
+            return
+        if path == "/api/student/profile":
+            self.update_student_profile()
             return
         if path == "/api/specialist/profile":
             self.update_specialist_profile()
@@ -1695,6 +1761,100 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 (hash_password(new_password), teacher["id"]),
             )
         self.json_response({"ok": True, "must_reset_password": False})
+
+    def update_teacher_profile(self) -> None:
+        teacher = self.bearer_admin()
+        if not teacher or "id" not in teacher.keys():
+            self.error_response("Entre novamente para editar seu perfil.", 401)
+            return
+        data = self.read_json()
+        name = str(data.get("name", "")).strip()
+        username = str(data.get("username", "")).strip().lower()
+        email = str(data.get("email", "")).strip().lower()
+        if len(name) < 3:
+            self.error_response("Informe o nome que será exibido no painel.")
+            return
+        if not re.fullmatch(r"[a-z0-9._-]{3,60}", username):
+            self.error_response("O usuário deve ter de 3 a 60 caracteres, sem espaços.")
+            return
+        if email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            self.error_response("Informe um e-mail válido.")
+            return
+        try:
+            with connect() as database:
+                database.execute(
+                    """
+                    UPDATE teachers
+                    SET name = ?, username = ?, email = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (name, username, email, teacher["id"]),
+                )
+                updated = database.execute(
+                    "SELECT id, name, username, email, must_reset_password FROM teachers WHERE id = ?",
+                    (teacher["id"],),
+                ).fetchone()
+        except sqlite3.IntegrityError:
+            self.error_response("Esse nome de usuário já está em uso.", 409)
+            return
+        self.json_response({"ok": True, "teacher": dict(updated)})
+
+    def update_student_profile(self) -> None:
+        student = self.bearer_student()
+        if not student:
+            self.error_response("Entre novamente na disciplina para editar seu perfil.", 401)
+            return
+        data = self.read_json()
+        name = str(data.get("name", "")).strip()
+        email = str(data.get("email", "")).strip().lower()
+        nusp = str(data.get("nusp", "")).strip()
+        group_name = str(data.get("group_name", "—")).strip() or "—"
+        if len(name) < 3 or not re.fullmatch(r"\d{7,10}", nusp):
+            self.error_response("Informe nome e Nº USP válidos.")
+            return
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            self.error_response("Informe um e-mail válido.")
+            return
+        try:
+            with connect() as database:
+                database.execute(
+                    """
+                    UPDATE students
+                    SET name = ?, email = ?, nusp = ?, group_name = ?
+                    WHERE id = ?
+                    """,
+                    (name, email, nusp, group_name[:120], student["id"]),
+                )
+                updated = database.execute(
+                    "SELECT s.*, c.code AS course_code FROM students s JOIN courses c ON c.id = s.course_id WHERE s.id = ?",
+                    (student["id"],),
+                ).fetchone()
+        except sqlite3.IntegrityError:
+            self.error_response("Esse e-mail ou Nº USP já está cadastrado na disciplina.", 409)
+            return
+        self.json_response({"ok": True, "student": public_student(updated)})
+
+    def rotate_own_student_token(self) -> None:
+        student = self.bearer_student()
+        if not student:
+            self.error_response("Entre novamente na disciplina para trocar a credencial.", 401)
+            return
+        access_token = create_access_token()
+        current_session = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        with connect() as database:
+            database.execute(
+                """
+                UPDATE students
+                SET access_token_hash = ?, access_token_hint = ?, token_created_at = ?
+                WHERE id = ?
+                """,
+                (secret_hash(access_token), access_token[-6:], utc_now_iso(), student["id"]),
+            )
+            database.execute(
+                "DELETE FROM auth_sessions WHERE student_id = ? AND token <> ?",
+                (student["id"], current_session),
+            )
+        self.json_response({"ok": True, "access_token": access_token, "hint": access_token[-6:]})
 
     def create_student(self, code: str) -> None:
         data = self.read_json()

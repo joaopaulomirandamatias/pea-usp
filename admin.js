@@ -80,23 +80,33 @@
   function setAdminView(view) {
     const allowed = ['visao', 'disciplinas', 'aulas', 'pessoas', 'conteudo', 'configuracoes'];
     const activeView = allowed.includes(view) ? view : 'visao';
+    document.body.dataset.adminActiveView = activeView;
     $$('[data-admin-view]').forEach((element) => {
       element.hidden = !element.dataset.adminView.split(/\s+/).includes(activeView);
     });
     $$('[data-admin-route]').forEach((link) => link.classList.toggle('active', link.dataset.adminRoute === activeView));
+    renderCourseTabs();
+    if (activeView === 'aulas' && String(course.status).toLowerCase() !== 'publicada') {
+      const publishedCourse = state.courses.find((item) => String(item.status).toLowerCase() === 'publicada');
+      if (publishedCourse && publishedCourse.code !== course.code) void selectCourse(publishedCourse.code);
+    }
     if (window.location.hash !== `#${activeView}`) window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}#${activeView}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function renderCourseTabs() {
-    $('#courseTabs').innerHTML = state.courses.map((item) => `
-      <button class="admin-course-tab ${item.code === course.code ? 'active' : ''}" data-course="${esc(item.code)}" style="background-image:url('${esc(item.cover)}')">
-        <small>${esc(item.code)} · ${esc(item.semester)}</small>
+    const scheduleView = document.body.dataset.adminActiveView === 'aulas';
+    $('#courseTabs').innerHTML = state.courses.map((item) => {
+      const inactive = scheduleView && String(item.status).toLowerCase() !== 'publicada';
+      return `
+      <button class="admin-course-tab ${item.code === course.code ? 'active' : ''} ${inactive ? 'course-inactive' : ''}" data-course="${esc(item.code)}" style="background-image:url('${esc(item.cover)}')" ${inactive ? 'disabled aria-disabled="true" title="Ative esta disciplina na seção Disciplinas para gerenciar aulas e artigos"' : ''}>
+        <span class="course-card-code">${esc(item.code)} · ${esc(item.semester)}</span>
         <strong>${esc(item.shortTitle)}</strong>
-        <span>${esc(item.status)}</span>
+        <span class="course-card-state">${esc(item.status)}</span>
+        <span class="course-card-action">${inactive ? 'Ative em Disciplinas' : item.code === course.code ? 'Em gestão agora' : 'Gerenciar disciplina'} <b aria-hidden="true">${inactive ? '⊘' : '→'}</b></span>
       </button>
-    `).join('');
-    $$('.admin-course-tab').forEach((button) => button.addEventListener('click', () => selectCourse(button.dataset.course)));
+    `; }).join('');
+    $$('.admin-course-tab:not(:disabled)').forEach((button) => button.addEventListener('click', () => selectCourse(button.dataset.course)));
   }
 
   function renderMetrics() {
@@ -114,6 +124,88 @@
     setText('#submissionMetricDetail', remoteCourse ? 'materiais recebidos' : (submissions.length === 1 ? 'grupo reservado' : 'grupos reservados'));
   }
 
+  function renderOverviewAgenda() {
+    const board = $('#overviewAgendaBoard');
+    if (!board) return;
+    const session = remoteCourse?.next_class;
+
+    if (!session) {
+      setText('#overviewAgendaKicker', 'Agenda operacional');
+      setText('#overviewAgendaHeading', 'Próxima aula');
+      setText('#overviewAgendaSummary', remoteCourse ? `${course.code} não possui outra aula futura cadastrada.` : 'A agenda será atualizada assim que os dados da disciplina forem carregados.');
+      board.innerHTML = `<div class="overview-agenda-empty">
+        <span aria-hidden="true">＋</span>
+        <div><strong>${remoteCourse ? 'O calendário está livre daqui em diante.' : 'Conectando ao calendário da disciplina…'}</strong><p>${remoteCourse ? 'Cadastre a próxima data para ativar o roteiro automático da aula.' : 'Se a conexão não estiver disponível, os demais dados locais continuam preservados.'}</p></div>
+        ${remoteCourse ? '<button class="admin-button primary" type="button" data-overview-new-class>+ Agendar aula</button>' : ''}
+      </div>`;
+      $('[data-overview-new-class]')?.addEventListener('click', () => openClassDialog());
+      return;
+    }
+
+    const today = todayInCourseTimezone();
+    const classDate = dateFromISO(session.session_date);
+    const dayDifference = Math.round((classDate - today) / 86400000);
+    const temporalLabel = dayDifference === 0 ? 'Acontece hoje' : dayDifference === 1 ? 'Acontece amanhã' : `Em ${dayDifference} dias`;
+    const heading = dayDifference === 0 ? 'Agenda de hoje' : 'Próxima aula';
+    const articles = session.articles || [];
+    const articleAssignments = articles.map((article) => {
+      const names = [...new Set([
+        ...(article.presenters || []).map((student) => student.name),
+        article.reservation?.student_name
+      ].filter(Boolean))];
+      return { ...article, presenterNames: names };
+    });
+    const presenterNames = [...new Set(articleAssignments.flatMap((article) => article.presenterNames))];
+    const assignedArticles = articleAssignments.filter((article) => article.presenterNames.length).length;
+    const articleRows = articleAssignments.slice(0, 3).map((article) => `<li>
+      <span>${esc(article.code || 'ART')}</span>
+      <div><strong>${esc(article.title)}</strong><small>${article.presenterNames.length ? esc(article.presenterNames.join(', ')) : 'Ainda sem apresentador'}</small></div>
+    </li>`).join('');
+    const additionalArticles = Math.max(0, articleAssignments.length - 3);
+    const time = String(session.start_time || '').slice(0, 5) || 'Horário a definir';
+    const location = session.location || course.room || 'Local a definir';
+    const month = formatClassDate(session.session_date, { month: 'short' }).replace('.', '').toUpperCase();
+    const weekday = formatClassDate(session.session_date, { weekday: 'long' });
+
+    setText('#overviewAgendaKicker', temporalLabel);
+    setText('#overviewAgendaHeading', heading);
+    setText('#overviewAgendaSummary', `${course.code} · ${weekday}, ${formatClassDate(session.session_date, { day: '2-digit', month: 'long' })} às ${time}.`);
+    board.innerHTML = `
+      <div class="overview-agenda-date" aria-label="${esc(formatClassDate(session.session_date, { dateStyle: 'full' }))}">
+        <small>${esc(month)}</small>
+        <strong>${esc(formatClassDate(session.session_date, { day: '2-digit' }))}</strong>
+        <span>${esc(formatClassDate(session.session_date, { year: 'numeric' }))}</span>
+        <i></i>
+        <time datetime="${esc(session.session_date)}T${esc(time)}">${esc(time)}</time>
+      </div>
+      <div class="overview-agenda-content">
+        <span class="overview-theme">${esc(session.theme || 'Tema a definir')}</span>
+        <h3>${esc(session.title)}</h3>
+        <p class="overview-agenda-meta"><span>◷ ${esc(time)}</span><span>⌖ ${esc(location)}</span><span>${session.meet_url ? '● Meet configurado' : '○ Meet pendente'}</span></p>
+        <div class="overview-moments">
+          <article>
+            <span>01 / Conversa com especialista</span>
+            <strong>${esc(session.specialist_name || 'Especialista a confirmar')}</strong>
+            <p>${esc(session.specialist_topic || session.specialist_role || 'Tema e informações profissionais ainda não cadastrados.')}</p>
+          </article>
+          <article>
+            <span>02 / Apresentação dos alunos</span>
+            <strong>${articles.length ? `${articles.length} artigo${articles.length === 1 ? '' : 's'} · ${assignedArticles} com responsável` : 'Artigos a definir'}</strong>
+            ${articleRows ? `<ul class="overview-article-roster">${articleRows}</ul>${additionalArticles ? `<small class="overview-more-articles">+ ${additionalArticles} artigo${additionalArticles === 1 ? '' : 's'} na pauta</small>` : ''}` : '<p>Nenhum artigo foi vinculado a esta aula.</p>'}
+          </article>
+        </div>
+      </div>
+      <aside class="overview-agenda-actions">
+        <div class="overview-agenda-status"><span></span><small>Roteiro ativo</small><strong>${esc(temporalLabel)}</strong></div>
+        <dl><div><dt>Apresentadores</dt><dd>${presenterNames.length || '—'}</dd></div><div><dt>Artigos</dt><dd>${articles.length || '—'}</dd></div></dl>
+        <button class="admin-button primary" type="button" data-overview-edit-class="${session.id}">Editar esta aula</button>
+        <button class="admin-button" type="button" data-overview-open-schedule>Ver agenda completa</button>
+      </aside>`;
+
+    $('[data-overview-edit-class]')?.addEventListener('click', () => openClassDialog(session.id));
+    $('[data-overview-open-schedule]')?.addEventListener('click', () => setAdminView('aulas'));
+  }
+
   function populateForm() {
     const form = $('#courseForm');
     ['code', 'semester', 'title', 'shortTitle', 'description', 'ementa', 'classDay', 'room', 'cover', 'status', 'visibility'].forEach((field) => {
@@ -123,6 +215,9 @@
     setText('#coverCode', course.code);
     setText('#coverTitle', course.shortTitle);
     setText('#courseStatusLabel', course.status);
+    const catalogLink = $('#catalogSourceLink');
+    catalogLink.hidden = !course.catalogUrl;
+    if (course.catalogUrl) catalogLink.href = course.catalogUrl;
     if (remoteCourse) {
       $('#publicOverview').checked = Boolean(remoteCourse.public_overview);
       $('#publicSchedule').checked = Boolean(remoteCourse.public_schedule);
@@ -501,6 +596,9 @@
         room: remoteCourse.room || course.room,
         professor: remoteCourse.professor_name || course.professor,
         cover: remoteCourse.cover || course.cover,
+        credits: remoteCourse.credits || course.credits,
+        workload: remoteCourse.workload || course.workload,
+        catalogUrl: remoteCourse.catalog_url || course.catalogUrl,
         updatedAt: remoteCourse.updated_at
       });
       course.driveUrl = remoteCourse.drive_url || '';
@@ -515,6 +613,7 @@
       populateForm();
       renderPublication();
       renderMetrics();
+      renderOverviewAgenda();
       renderDrive();
       renderClasses();
       renderStudents();
@@ -534,6 +633,7 @@
       }
     } catch (error) {
       remoteCourse = null;
+      renderOverviewAgenda();
       renderClasses();
       renderUploads();
       renderDeliverableTypes();
@@ -545,8 +645,10 @@
   function renderAll() {
     setText('#breadcrumbCode', course.code);
     $('#studentViewLink').href = `index.html?curso=${encodeURIComponent(course.code)}`;
+    $('#teacherProfileLink').href = `profile.html?role=teacher&curso=${encodeURIComponent(course.code)}`;
     renderCourseTabs();
     renderMetrics();
+    renderOverviewAgenda();
     populateForm();
     renderDrive();
     renderClasses();
