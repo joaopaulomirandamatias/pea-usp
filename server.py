@@ -561,6 +561,30 @@ def apply_official_catalog(database: sqlite3.Connection) -> None:
     database.execute("INSERT INTO app_metadata (key, value) VALUES (?, ?)", (migration_key, utc_now_iso()))
 
 
+def apply_course_hero_videos(database: sqlite3.Connection) -> None:
+    hero_videos = {
+        "PEA5003": ("assets/pea5003-hero.webm", "pea5003_hero_video_2026_08_26"),
+        "PEA5004": ("assets/pea5004-hero.webm", "pea5004_hero_video_2026_08_26"),
+    }
+    for code, (video_path, migration_key) in hero_videos.items():
+        if database.execute(
+            "SELECT 1 FROM app_metadata WHERE key = ?", (migration_key,)
+        ).fetchone():
+            continue
+        database.execute(
+            """
+            UPDATE courses SET cover_media_type = 'video', cover_video = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE UPPER(code) = ?
+            """,
+            (video_path, code),
+        )
+        database.execute(
+            "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
+            (migration_key, utc_now_iso()),
+        )
+
+
 def connect() -> sqlite3.Connection:
     database = sqlite3.connect(DB_PATH)
     database.row_factory = sqlite3.Row
@@ -661,21 +685,7 @@ def initialize_database() -> None:
                         "INSERT INTO deliverable_types (course_id, name) VALUES (?, ?)",
                         [(existing_course["id"], name) for name in ("Resenha", "Artigo", "Apresentação", "Artigo final")],
                     )
-            hero_video_migration_key = "pea5003_hero_video_2026_08_26"
-            if not database.execute(
-                "SELECT 1 FROM app_metadata WHERE key = ?", (hero_video_migration_key,)
-            ).fetchone():
-                database.execute(
-                    """
-                    UPDATE courses SET cover_media_type = 'video',
-                        cover_video = 'assets/pea5003-hero.webm', updated_at = CURRENT_TIMESTAMP
-                    WHERE UPPER(code) = 'PEA5003'
-                    """
-                )
-                database.execute(
-                    "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
-                    (hero_video_migration_key, utc_now_iso()),
-                )
+            apply_course_hero_videos(database)
             apply_official_catalog(database)
             return
         database.executemany(
@@ -686,21 +696,7 @@ def initialize_database() -> None:
             """,
             COURSE_SEEDS,
         )
-        hero_video_migration_key = "pea5003_hero_video_2026_08_26"
-        if not database.execute(
-            "SELECT 1 FROM app_metadata WHERE key = ?", (hero_video_migration_key,)
-        ).fetchone():
-            database.execute(
-                """
-                UPDATE courses SET cover_media_type = 'video',
-                    cover_video = 'assets/pea5003-hero.webm', updated_at = CURRENT_TIMESTAMP
-                WHERE UPPER(code) = 'PEA5003'
-                """
-            )
-            database.execute(
-                "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
-                (hero_video_migration_key, utc_now_iso()),
-            )
+        apply_course_hero_videos(database)
         database.execute(
             """
             UPDATE courses SET drive_sync_status = 'credentials_required',
