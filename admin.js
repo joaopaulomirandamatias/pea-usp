@@ -116,6 +116,8 @@
         code: item.code, title: item.title, shortTitle: item.short_title, semester: item.semester,
         status: item.status, visibility: item.visibility, updatedAt: item.updated_at,
         cover: item.cover || existing?.cover || 'assets/course-pea5004.webp',
+        coverMediaType: item.cover_media_type || existing?.coverMediaType || 'image',
+        coverVideo: item.cover_video ?? existing?.coverVideo ?? '',
         driveUrl: item.drive_url ?? existing?.driveUrl ?? '', driveConnected: Boolean(item.drive_connected)
       };
       if (existing) {
@@ -238,12 +240,28 @@
     $('[data-overview-open-schedule]')?.addEventListener('click', () => setAdminView('aulas'));
   }
 
+  function renderCoverPreview() {
+    const editor = $('#courseCoverEditor');
+    const video = $('#courseCoverVideo');
+    editor.style.backgroundImage = `url('${course.cover}')`;
+    const useVideo = course.coverMediaType === 'video' && Boolean(course.coverVideo);
+    video.hidden = !useVideo;
+    if (useVideo) {
+      if (video.getAttribute('src') !== course.coverVideo) video.src = course.coverVideo;
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) void video.play().catch(() => {});
+    } else {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
+  }
+
   function populateForm() {
     const form = $('#courseForm');
-    ['code', 'semester', 'title', 'shortTitle', 'description', 'ementa', 'classDay', 'room', 'cover', 'status', 'visibility'].forEach((field) => {
+    ['code', 'semester', 'title', 'shortTitle', 'description', 'ementa', 'classDay', 'room', 'cover', 'coverMediaType', 'coverVideo', 'status', 'visibility'].forEach((field) => {
       if (form.elements[field]) form.elements[field].value = course[field] || '';
     });
-    $('#courseCoverEditor').style.backgroundImage = `url('${course.cover}')`;
+    renderCoverPreview();
     setText('#coverCode', course.code);
     setText('#coverTitle', course.shortTitle);
     setText('#courseStatusLabel', course.status);
@@ -651,6 +669,8 @@
         room: remoteCourse.room || course.room,
         professor: remoteCourse.professor_name || course.professor,
         cover: remoteCourse.cover || course.cover,
+        coverMediaType: remoteCourse.cover_media_type || course.coverMediaType || 'image',
+        coverVideo: remoteCourse.cover_video ?? course.coverVideo ?? '',
         credits: remoteCourse.credits || course.credits,
         workload: remoteCourse.workload || course.workload,
         catalogUrl: remoteCourse.catalog_url || course.catalogUrl,
@@ -747,7 +767,8 @@
         method: 'PUT',
         body: JSON.stringify({
           title: course.title, shortTitle: course.shortTitle, semester: course.semester,
-          cover: course.cover, driveUrl: course.driveUrl, status: course.status,
+          cover: course.cover, coverMediaType: course.coverMediaType, coverVideo: course.coverVideo,
+          driveUrl: course.driveUrl, status: course.status,
           visibility: course.visibility, description: course.description, ementa: course.ementa,
           classDay: course.classDay, room: course.room, professorName: course.professor,
           publicOverview: $('#publicOverview').checked,
@@ -777,10 +798,37 @@
     try {
       const result = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/cover`, { method: 'POST', body: payload });
       course.cover = result.cover;
+      course.coverMediaType = 'image';
       $('#coverFileInput').value = '';
       await loadRemoteAdmin();
       showToast('Nova capa publicada para a disciplina.');
     } catch (error) { showToast(error.message); }
+  });
+
+  $('#uploadCoverVideoButton').addEventListener('click', async () => {
+    const file = $('#coverVideoFileInput').files?.[0];
+    if (!file) { showToast('Selecione um vídeo WebM ou MP4 para enviar.'); return; }
+    const payload = new FormData();
+    payload.append('video', file);
+    try {
+      const result = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/cover-video`, { method: 'POST', body: payload });
+      course.coverVideo = result.cover_video;
+      course.coverMediaType = 'video';
+      $('#coverVideoFileInput').value = '';
+      await loadRemoteAdmin();
+      showToast('Vídeo de capa publicado em loop, com a imagem preservada como fallback.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  $('#courseForm').elements.coverMediaType.addEventListener('change', (event) => {
+    course.coverMediaType = event.currentTarget.value;
+    course.cover = $('#courseForm').elements.cover.value.trim() || course.cover;
+    course.coverVideo = $('#courseForm').elements.coverVideo.value.trim();
+    renderCoverPreview();
+  });
+  $('#courseForm').elements.coverVideo.addEventListener('change', (event) => {
+    course.coverVideo = event.currentTarget.value.trim();
+    if (course.coverMediaType === 'video') renderCoverPreview();
   });
 
   async function fillWithAI(kind, form, fieldNames) {
@@ -1272,7 +1320,9 @@
       room: 'A definir',
       professor: 'Profa. Maria Lídia',
       updatedAt: 'Agora',
-      cover: 'assets/course-pea5004.webp',
+      cover: templateCopy.cover || 'assets/course-pea5004.webp',
+      coverMediaType: templateCopy.coverMediaType || 'image',
+      coverVideo: templateCopy.coverVideo || '',
       accent: '#56d6ca',
       driveUrl: values.driveUrl.trim(),
       driveConnected: false,
@@ -1301,6 +1351,8 @@
           short_title: newCourse.shortTitle,
           semester: newCourse.semester,
           cover: newCourse.cover,
+          cover_media_type: newCourse.coverMediaType,
+          cover_video: newCourse.coverVideo,
           drive_url: newCourse.driveUrl,
           template_code: values.template_code,
           first_class_date: values.first_class_date

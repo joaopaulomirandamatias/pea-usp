@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260826-activities">
+  <link rel="stylesheet" href="styles.css?v=20260826-video">
 </head>
 <body class="admin-page admin-locked" data-admin-active-view="visao">
   <a class="skip-link" href="#adminContent">Pular para o conteúdo</a>
@@ -82,12 +82,15 @@
               <header class="panel-heading"><div><h2>Informações da disciplina</h2><p>Título, ementa e apresentação que o aluno vê.</p></div><div class="panel-heading-actions"><button class="admin-button ai-button" id="aiCourseButton" type="button">✦ Preencher com IA</button><span class="eyebrow" id="courseStatusLabel">Publicada</span></div></header>
               <div class="panel-body">
                 <div class="course-cover-editor" id="courseCoverEditor">
+                  <video id="courseCoverVideo" muted loop playsinline preload="metadata" hidden></video>
                   <div class="cover-editor-copy"><small id="coverCode">PEA5004</small><strong id="coverTitle">Monitoramento e segurança portuária</strong></div>
                 </div>
                 <div class="cover-source-row">
-                  <label class="admin-field">Enviar nova capa<input id="coverFileInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
-                  <button class="admin-button" id="uploadCoverButton" type="button">Enviar imagem</button>
-                  <small>JPG, PNG, WebP ou GIF · até 8 MB. O link abaixo continua disponível como alternativa.</small>
+                  <label class="admin-field">Enviar imagem<input id="coverFileInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+                  <button class="admin-button" id="uploadCoverButton" type="button">Usar imagem</button>
+                  <label class="admin-field">Enviar vídeo em loop<input id="coverVideoFileInput" type="file" accept="video/webm,video/mp4"></label>
+                  <button class="admin-button" id="uploadCoverVideoButton" type="button">Usar vídeo</button>
+                  <small>Imagem: JPG, PNG, WebP ou GIF até 8 MB. Vídeo: WebM ou MP4 até 30 MB, preferencialmente 720p e sem áudio.</small>
                 </div>
                 <form class="editor-grid" id="courseForm">
                   <label class="admin-field">Código<input name="code" required maxlength="12" readonly></label>
@@ -99,7 +102,9 @@
                   <a class="catalog-source-link full" id="catalogSourceLink" href="#" target="_blank" rel="noopener noreferrer">Consultar cadastro oficial no Janus/USP ↗</a>
                   <label class="admin-field">Dia e horário<input name="classDay"></label>
                   <label class="admin-field">Sala<input name="room"></label>
-                  <label class="admin-field full">URL da capa<input name="cover" placeholder="assets/course-pea5004.webp"></label>
+                  <label class="admin-field">Tipo da capa<select name="coverMediaType"><option value="image">Imagem</option><option value="video">Vídeo em loop</option></select></label>
+                  <label class="admin-field">URL da imagem de fallback<input name="cover" placeholder="assets/course-pea5004.webp"></label>
+                  <label class="admin-field full">URL do vídeo<input name="coverVideo" placeholder="assets/video-da-disciplina.webm"></label>
                   <label class="admin-field">Estado<select name="status"><option>Rascunho</option><option>Publicada</option><option>Arquivada</option></select></label>
                   <label class="admin-field">Visibilidade<select name="visibility"><option>Somente alunos cadastrados</option><option>Link da turma</option><option>Pública</option></select></label>
                 </form>
@@ -385,7 +390,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="data.js"></script>
-  <script src="admin.js?v=20260826-activities"></script>
+  <script src="data.js?v=20260826-video"></script>
+  <script src="admin.js?v=20260826-video"></script>
 </body>
 </html>

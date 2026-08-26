@@ -85,6 +85,8 @@
         professor: 'Profa. Dra. Lídia Rebello Dias',
         updatedAt: '20 ago. 2026 · 09:15',
         cover: 'assets/course-pea5003.webp',
+        coverMediaType: 'video',
+        coverVideo: 'assets/pea5003-hero.webm',
         accent: '#65b8ff',
         driveUrl: 'https://drive.google.com/drive/folders/1Z6EvnGAYkvGZZKKyOVzmxDa0AjveNKFz',
         driveConnected: true,

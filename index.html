@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260826-activities">
+  <link rel="stylesheet" href="styles.css?v=20260826-video">
 </head>
 <body class="student-page">
   <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
@@ -73,7 +73,9 @@
 
   <main id="conteudo">
     <section class="cinematic-hero cine-scene" id="top" data-cinematic-scene="top" aria-labelledby="heroTitle">
-      <div class="hero-media" id="heroMedia" aria-hidden="true"></div>
+      <div class="hero-media" id="heroMedia" aria-hidden="true">
+        <video id="heroVideo" muted loop playsinline preload="metadata" hidden></video>
+      </div>
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="chart-grid" aria-hidden="true"></div>
       <div class="hero-content shell">
@@ -418,7 +420,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="data.js"></script>
-  <script src="app.js?v=20260826-activities"></script>
+  <script src="data.js?v=20260826-video"></script>
+  <script src="app.js?v=20260826-video"></script>
 </body>
 </html>

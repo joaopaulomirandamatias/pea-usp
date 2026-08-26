@@ -47,6 +47,7 @@ COVER_DIR = DATA_DIR / "course-covers"
 DRIVE_SYNC_DIR = DATA_DIR / "drive-sync"
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_COVER_BYTES = 8 * 1024 * 1024
+MAX_COVER_VIDEO_BYTES = 30 * 1024 * 1024
 MAX_DRIVE_FILE_BYTES = 100 * 1024 * 1024
 APP_TIMEZONE = ZoneInfo("America/Belem")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "professora")
@@ -169,6 +170,9 @@ CREATE TABLE IF NOT EXISTS courses (
     catalog_url TEXT NOT NULL DEFAULT '',
     catalog_professor TEXT NOT NULL DEFAULT '',
     cover TEXT NOT NULL DEFAULT '',
+    cover_media_type TEXT NOT NULL DEFAULT 'image',
+    cover_video TEXT NOT NULL DEFAULT '',
+    cover_video_file TEXT NOT NULL DEFAULT '',
     drive_url TEXT NOT NULL DEFAULT '',
     drive_connected INTEGER NOT NULL DEFAULT 0,
     drive_sync_status TEXT NOT NULL DEFAULT 'pending',
@@ -583,6 +587,9 @@ def initialize_database() -> None:
             "catalog_url": "TEXT NOT NULL DEFAULT ''",
             "catalog_professor": "TEXT NOT NULL DEFAULT ''",
             "cover_file": "TEXT NOT NULL DEFAULT ''",
+            "cover_media_type": "TEXT NOT NULL DEFAULT 'image'",
+            "cover_video": "TEXT NOT NULL DEFAULT ''",
+            "cover_video_file": "TEXT NOT NULL DEFAULT ''",
             "drive_sync_status": "TEXT NOT NULL DEFAULT 'pending'",
             "drive_sync_error": "TEXT NOT NULL DEFAULT ''",
             "drive_last_synced_at": "TEXT NOT NULL DEFAULT ''",
@@ -664,6 +671,21 @@ def initialize_database() -> None:
             """,
             COURSE_SEEDS,
         )
+        hero_video_migration_key = "pea5003_hero_video_2026_08_26"
+        if not database.execute(
+            "SELECT 1 FROM app_metadata WHERE key = ?", (hero_video_migration_key,)
+        ).fetchone():
+            database.execute(
+                """
+                UPDATE courses SET cover_media_type = 'video',
+                    cover_video = 'assets/pea5003-hero.webm', updated_at = CURRENT_TIMESTAMP
+                WHERE UPPER(code) = 'PEA5003'
+                """
+            )
+            database.execute(
+                "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
+                (hero_video_migration_key, utc_now_iso()),
+            )
         database.execute(
             """
             UPDATE courses SET drive_sync_status = 'credentials_required',
@@ -925,6 +947,7 @@ def course_payload(
             "public_chat": bool(course["public_chat"]),
         }
         payload.pop("cover_file", None)
+        payload.pop("cover_video_file", None)
         if not admin:
             payload.pop("drive_sync_error", None)
         if not (admin or authenticated):
@@ -1685,7 +1708,8 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 courses = [
                     dict(row) for row in database.execute(
                         """
-                        SELECT code, title, short_title, semester, cover, status, visibility,
+                        SELECT code, title, short_title, semester, cover, cover_media_type, cover_video,
+                               status, visibility,
                                public_overview, public_schedule
                         FROM courses WHERE status = 'Publicada' ORDER BY code
                         """
@@ -1698,7 +1722,8 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 courses = [
                     dict(row) for row in database.execute(
                         """
-                        SELECT code, title, short_title, semester, cover, status, visibility,
+                        SELECT code, title, short_title, semester, cover, cover_media_type, cover_video,
+                               status, visibility,
                                drive_url, drive_connected, drive_sync_status, drive_last_synced_at,
                                public_overview, public_schedule, updated_at
                         FROM courses ORDER BY
@@ -1731,6 +1756,53 @@ class RotaHandler(SimpleHTTPRequestHandler):
             with target.open("rb") as source:
                 while chunk := source.read(64 * 1024):
                     self.wfile.write(chunk)
+            return
+        match = re.fullmatch(r"/api/courses/([A-Za-z0-9_-]+)/cover-video", path)
+        if match:
+            with connect() as database:
+                course = database.execute(
+                    "SELECT cover_video_file FROM courses WHERE UPPER(code) = UPPER(?)", (match.group(1),)
+                ).fetchone()
+            if not course or not course["cover_video_file"]:
+                self.error_response("Vídeo de capa enviado não encontrado.", 404)
+                return
+            target = (COVER_DIR / course["cover_video_file"]).resolve()
+            if target.parent != COVER_DIR.resolve() or not target.is_file():
+                self.error_response("Arquivo do vídeo de capa não encontrado.", 404)
+                return
+            file_size = target.stat().st_size
+            start, end, status = 0, file_size - 1, HTTPStatus.OK
+            range_header = self.headers.get("Range", "")
+            range_match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header)
+            if range_match:
+                try:
+                    start = int(range_match.group(1) or 0)
+                    end = min(file_size - 1, int(range_match.group(2) or file_size - 1))
+                except ValueError:
+                    start, end = 0, file_size - 1
+                if start > end or start >= file_size:
+                    self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                    self.send_header("Content-Range", f"bytes */{file_size}")
+                    self.end_headers()
+                    return
+                status = HTTPStatus.PARTIAL_CONTENT
+            self.send_response(status)
+            self.send_header("Content-Type", mimetypes.guess_type(target.name)[0] or "video/webm")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "public, max-age=3600")
+            if status == HTTPStatus.PARTIAL_CONTENT:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
+            self.end_headers()
+            with target.open("rb") as source:
+                source.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    chunk = source.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
             return
         match = re.fullmatch(r"/api/courses/([A-Za-z0-9_-]+)/meeting", path)
         if match:
@@ -1983,6 +2055,10 @@ class RotaHandler(SimpleHTTPRequestHandler):
         match = re.fullmatch(r"/api/admin/courses/([A-Za-z0-9_-]+)/cover", path)
         if match:
             self.upload_course_cover(match.group(1))
+            return
+        match = re.fullmatch(r"/api/admin/courses/([A-Za-z0-9_-]+)/cover-video", path)
+        if match:
+            self.upload_course_cover_video(match.group(1))
             return
         match = re.fullmatch(r"/api/admin/courses/([A-Za-z0-9_-]+)/sessions", path)
         if match:
@@ -2801,10 +2877,11 @@ class RotaHandler(SimpleHTTPRequestHandler):
                     """
                     INSERT INTO courses
                         (code, title, short_title, semester, description, ementa, class_day, room,
-                         professor_name, cover, drive_url, drive_connected, status,
+                         professor_name, cover, cover_media_type, cover_video,
+                         drive_url, drive_connected, status,
                          public_overview, public_schedule, public_articles, public_resources, public_chat,
                          grade_scale_json)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Rascunho', ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         code, title, str(data.get("short_title", title)).strip(), semester,
@@ -2813,7 +2890,9 @@ class RotaHandler(SimpleHTTPRequestHandler):
                         str(data.get("class_day", template_course["class_day"] if template_course else "")),
                         str(data.get("room", template_course["room"] if template_course else "")),
                         str(data.get("professor_name", template_course["professor_name"] if template_course else "Profa. Maria Lídia")),
-                        str(data.get("cover", "assets/course-pea5004.webp")),
+                        str(data.get("cover", template_course["cover"] if template_course else "assets/course-pea5004.webp")),
+                        str(data.get("cover_media_type", template_course["cover_media_type"] if template_course else "image")),
+                        str(data.get("cover_video", template_course["cover_video"] if template_course else "")),
                         str(data.get("drive_url", "")).strip(), 0,
                         template_course["public_overview"] if template_course else 1,
                         template_course["public_schedule"] if template_course else 1,
@@ -3040,6 +3119,7 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 return
             mapping = {
                 "title": "title", "shortTitle": "short_title", "semester": "semester", "cover": "cover",
+                "coverMediaType": "cover_media_type", "coverVideo": "cover_video",
                 "description": "description", "ementa": "ementa", "classDay": "class_day",
                 "room": "room", "professorName": "professor_name",
                 "driveUrl": "drive_url", "status": "status", "visibility": "visibility",
@@ -3049,6 +3129,14 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 "gradeResultsPublished": "grade_results_published",
             }
             updates = {column: data[key] for key, column in mapping.items() if key in data}
+            if "cover_media_type" in updates and updates["cover_media_type"] not in {"image", "video"}:
+                self.error_response("Escolha imagem ou vídeo para a capa.")
+                return
+            if updates.get("cover_media_type") == "video" and not str(
+                updates.get("cover_video", course["cover_video"])
+            ).strip():
+                self.error_response("Informe ou envie um vídeo antes de ativar a capa em movimento.")
+                return
             if "status" in updates and updates["status"] not in {"Rascunho", "Publicada", "Arquivada"}:
                 self.error_response("Escolha Rascunho, Publicada ou Arquivada.")
                 return
@@ -3170,7 +3258,10 @@ class RotaHandler(SimpleHTTPRequestHandler):
             old_file = course["cover_file"]
             cover_url = f"/api/courses/{code.upper()}/cover?v={uuid.uuid4().hex[:8]}"
             database.execute(
-                "UPDATE courses SET cover = ?, cover_file = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                """
+                UPDATE courses SET cover = ?, cover_file = ?, cover_media_type = 'image',
+                    updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                """,
                 (cover_url, stored_name, course["id"]),
             )
         if old_file:
@@ -3178,6 +3269,67 @@ class RotaHandler(SimpleHTTPRequestHandler):
             if old_target.parent == COVER_DIR.resolve() and old_target != destination:
                 old_target.unlink(missing_ok=True)
         self.json_response({"cover": cover_url, "course": course_payload(code, admin=True)}, 201)
+
+    def upload_course_cover_video(self, code: str) -> None:
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            content_length = 0
+        if content_length <= 0 or content_length > MAX_COVER_VIDEO_BYTES:
+            self.error_response("O vídeo de capa deve ter no máximo 30 MB.", 413)
+            return
+        content_type = self.headers.get("Content-Type", "")
+        if "multipart/form-data" not in content_type:
+            self.error_response("Envie o vídeo como formulário multipart.")
+            return
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": content_type, "CONTENT_LENGTH": str(content_length)},
+        )
+        file_field = form["video"] if "video" in form else None
+        if file_field is None or not getattr(file_field, "filename", ""):
+            self.error_response("Selecione um vídeo WebM ou MP4 para a capa.")
+            return
+        mime_type = file_field.type or mimetypes.guess_type(file_field.filename)[0] or ""
+        extension_by_mime = {"video/webm": ".webm", "video/mp4": ".mp4"}
+        extension = extension_by_mime.get(mime_type)
+        if not extension:
+            self.error_response("Use um vídeo WebM ou MP4, preferencialmente sem áudio.")
+            return
+        stored_name = f"{uuid.uuid4().hex}{extension}"
+        destination = COVER_DIR / stored_name
+        size = 0
+        with destination.open("wb") as output:
+            while chunk := file_field.file.read(64 * 1024):
+                size += len(chunk)
+                if size > MAX_COVER_VIDEO_BYTES:
+                    destination.unlink(missing_ok=True)
+                    self.error_response("O vídeo de capa deve ter no máximo 30 MB.", 413)
+                    return
+                output.write(chunk)
+        with connect() as database:
+            course = database.execute(
+                "SELECT id, cover_video_file FROM courses WHERE UPPER(code) = UPPER(?)", (code,)
+            ).fetchone()
+            if not course:
+                destination.unlink(missing_ok=True)
+                self.error_response("Disciplina não encontrada.", 404)
+                return
+            old_file = course["cover_video_file"]
+            video_url = f"/api/courses/{code.upper()}/cover-video?v={uuid.uuid4().hex[:8]}"
+            database.execute(
+                """
+                UPDATE courses SET cover_media_type = 'video', cover_video = ?, cover_video_file = ?,
+                    updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                """,
+                (video_url, stored_name, course["id"]),
+            )
+        if old_file:
+            old_target = (COVER_DIR / old_file).resolve()
+            if old_target.parent == COVER_DIR.resolve() and old_target != destination:
+                old_target.unlink(missing_ok=True)
+        self.json_response({"cover_video": video_url, "course": course_payload(code, admin=True)}, 201)
 
     def create_specialist_invite(self, session_id: int) -> None:
         data = self.read_json()

@@ -62,7 +62,9 @@ Para entrar em PEA5004:
 - publicação, rascunho e arquivamento: somente disciplinas publicadas aparecem no site; arquivadas ficam exclusivas do painel docente e invalidam sessões da turma;
 - sincronização manual e automática do Google Drive para o volume persistente, com downloads autenticados e opção de materiais públicos;
 - seletor público limitado às disciplinas publicadas e catálogo completo no painel docente;
-- capas cinematográficas, trilha, ementa, objetivos, acervo e dicas de apresentação;
+- capas cinematográficas configuráveis por disciplina, com imagem ou vídeo WebM/MP4 silencioso em loop, imagem de fallback e respeito à preferência de movimento reduzido do navegador;
+- upload de capas em vídeo de até 30 MB no painel docente; a PEA5003 usa um WebM VP9 de 1280×720 otimizado para 1,7 MB;
+- trilha, ementa, objetivos, acervo e dicas de apresentação;
 - uso da marca da Escola Politécnica da USP fornecida para o projeto.
 
 PEA5003 e PEA5714 já estão cadastradas com os links de Drive fornecidos. PEA5004 permanece como vínculo pendente até o endereço ser informado.

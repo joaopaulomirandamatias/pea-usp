@@ -343,6 +343,8 @@
         room: remoteCourse.room || course.room,
         professor: remoteCourse.professor_name || course.professor,
         cover: remoteCourse.cover || course.cover,
+        coverMediaType: remoteCourse.cover_media_type || course.coverMediaType || 'image',
+        coverVideo: remoteCourse.cover_video ?? course.coverVideo ?? '',
         credits: remoteCourse.credits || course.credits,
         workload: remoteCourse.workload || course.workload,
         catalogUrl: remoteCourse.catalog_url || course.catalogUrl,
@@ -354,7 +356,7 @@
       setText('#heroSemester', course.semester.replace('semestre de', 'sem.'));
       setText('#syllabusText', course.ementa);
       setText('#professorName', course.professor);
-      $('#heroMedia').style.backgroundImage = `url('${course.cover}')`;
+      renderHeroMedia();
       $('#briefingPhoto').style.backgroundImage = `url('${course.cover}')`;
       $('#objectiveList').hidden = !canSeeOverview;
       if (!remoteCourse.access?.authenticated && remoteCourse.access?.public_schedule === false) {
@@ -392,7 +394,9 @@
           Object.assign(existing, {
             title: item.title, shortTitle: item.short_title, semester: item.semester,
             status: item.status, visibility: item.visibility, updatedAt: item.updated_at,
-            cover: item.cover || existing.cover, driveUrl: item.drive_url,
+            cover: item.cover || existing.cover,
+            coverMediaType: item.cover_media_type || existing.coverMediaType || 'image',
+            coverVideo: item.cover_video ?? existing.coverVideo ?? '', driveUrl: item.drive_url,
             driveConnected: Boolean(item.drive_connected), credits: item.credits || existing.credits,
             workload: item.workload || existing.workload, catalogUrl: item.catalog_url || existing.catalogUrl
           });
@@ -402,7 +406,8 @@
           code: item.code, title: item.title, shortTitle: item.short_title, semester: item.semester,
           status: item.status, visibility: item.visibility, progress: 0, credits: item.credits || 8, workload: item.workload || '120 h',
           classDay: 'A definir', room: 'A definir', professor: 'Profa. Dra. Lídia Rebello Dias',
-          updatedAt: item.updated_at, cover: item.cover || 'assets/course-pea5004.webp', accent: '#56d6ca',
+          updatedAt: item.updated_at, cover: item.cover || 'assets/course-pea5004.webp',
+          coverMediaType: item.cover_media_type || 'image', coverVideo: item.cover_video || '', accent: '#56d6ca',
           driveUrl: item.drive_url, driveConnected: Boolean(item.drive_connected),
           catalogUrl: item.catalog_url || '', description: item.description || 'Uma nova rota de aprendizagem.', ementa: item.ementa || 'Cadastre a ementa desta disciplina.',
           objectives: ['Cadastrar o primeiro objetivo.'], folders: [], modules: [], readings: [],
@@ -579,6 +584,35 @@
     if ($('#gradesLocked')) renderGrades();
   }
 
+  function renderHeroMedia() {
+    const media = $('#heroMedia');
+    const video = $('#heroVideo');
+    media.style.backgroundImage = `url('${course.cover}')`;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const useVideo = course.coverMediaType === 'video' && Boolean(course.coverVideo) && !reduceMotion;
+    video.poster = course.cover || '';
+    video.hidden = !useVideo;
+    if (!useVideo) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      media.classList.remove('video-active');
+      return;
+    }
+    video.muted = true;
+    video.loop = true;
+    video.playsInline = true;
+    if (video.getAttribute('src') !== course.coverVideo) {
+      video.src = course.coverVideo;
+      video.load();
+    }
+    media.classList.add('video-active');
+    void video.play().catch(() => {
+      video.hidden = true;
+      media.classList.remove('video-active');
+    });
+  }
+
   function renderCourse() {
     remoteCourse = null;
     $('#nextClassCard').hidden = true;
@@ -601,7 +635,7 @@
     setText('#professorName', course.professor);
     setText('#drivePath', `${course.code}_${course.semester.includes('2027') ? '2027' : '2026'}`);
     setText('#syncTime', course.driveConnected ? course.updatedAt : 'Vínculo pendente');
-    $('#heroMedia').style.backgroundImage = `url('${course.cover}')`;
+    renderHeroMedia();
     $('#briefingPhoto').style.backgroundImage = `url('${course.cover}')`;
     $('#objectiveList').innerHTML = course.objectives.map((objective) => `<div class="objective-item">${esc(objective)}</div>`).join('');
     $('#courseDescriptionLong').textContent = `Nesta rota, ${course.description.charAt(0).toLowerCase()}${course.description.slice(1)} Cada etapa conecta conceitos, evidências e uma decisão de engenharia.`;
