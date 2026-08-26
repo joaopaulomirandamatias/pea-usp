@@ -1,0 +1,27 @@
+[Unit]
+Description=Portal PEA USP
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pea
+Group=pea
+WorkingDirectory=/opt/pea-usp
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 /opt/pea-usp/server.py 4173
+Restart=on-failure
+RestartSec=3
+UMask=0027
+
+# O processo precisa gravar apenas o SQLite e os materiais recebidos.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/pea-usp
+MemoryMax=180M
+TasksMax=80
+
+[Install]
+WantedBy=multi-user.target
