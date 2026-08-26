@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#071522">
   <meta name="description" content="Rota da Disciplina — ambiente imersivo de aprendizagem para disciplinas PEA/USP.">
   <title>Rota da Disciplina · PEA/USP</title>
+  <link rel="icon" href="assets/epusp-logo.webp" type="image/webp">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -15,6 +16,22 @@
   <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
   <div class="page-noise" aria-hidden="true"></div>
   <div class="scroll-progress" aria-hidden="true"><span id="scrollProgress"></span></div>
+  <div class="cinematic-frame" aria-hidden="true">
+    <span class="cinematic-bar cinematic-bar--top"></span>
+    <span class="cinematic-bar cinematic-bar--bottom"></span>
+    <span class="cinematic-vignette"></span>
+    <span class="cinematic-scanline"></span>
+  </div>
+
+  <nav class="cinematic-chapters" id="cinematicChapters" aria-label="Capítulos da experiência">
+    <a href="#top" data-cinematic-link="top"><i>00</i><span>Abertura</span></a>
+    <a href="#proxima-aula" data-cinematic-link="proxima-aula"><i>01</i><span>Próxima aula</span></a>
+    <a href="#manifesto" data-cinematic-link="manifesto"><i>02</i><span>Manifesto</span></a>
+    <a href="#trilha" data-cinematic-link="trilha"><i>03</i><span>Trilha</span></a>
+    <a href="#ementa" data-cinematic-link="ementa"><i>04</i><span>Ementa</span></a>
+    <a href="#materiais" data-cinematic-link="materiais"><i>05</i><span>Materiais</span></a>
+    <a href="#apresentacao" data-cinematic-link="apresentacao"><i>06</i><span>Sua cena</span></a>
+  </nav>
 
   <header class="site-header" id="siteHeader">
     <a class="wordmark" href="#top" aria-label="Rota da Disciplina, início">
@@ -50,7 +67,7 @@
   <div class="switcher-scrim" id="switcherScrim" hidden></div>
 
   <main id="conteudo">
-    <section class="cinematic-hero" id="top" aria-labelledby="heroTitle">
+    <section class="cinematic-hero cine-scene" id="top" data-cinematic-scene="top" aria-labelledby="heroTitle">
       <div class="hero-media" id="heroMedia" aria-hidden="true"></div>
       <div class="hero-shade" aria-hidden="true"></div>
       <div class="chart-grid" aria-hidden="true"></div>
@@ -91,7 +108,7 @@
       </div>
     </section>
 
-    <section class="next-class-section section-pad" id="proxima-aula" aria-labelledby="nextClassTitle">
+    <section class="next-class-section section-pad cine-scene" id="proxima-aula" data-cinematic-scene="proxima-aula" aria-labelledby="nextClassTitle">
       <div class="shell">
         <header class="next-class-heading reveal">
           <div class="section-index"><span>00</span><i></i><small>Agora</small></div>
@@ -143,7 +160,7 @@
       </div>
     </section>
 
-    <section class="manifest-section section-pad" aria-labelledby="manifestTitle">
+    <section class="manifest-section section-pad cine-scene" id="manifesto" data-cinematic-scene="manifesto" aria-labelledby="manifestTitle">
       <div class="shell manifest-layout">
         <div class="section-index reveal"><span>01</span><i></i><small>Manifesto</small></div>
         <div class="manifest-copy reveal">
@@ -161,7 +178,7 @@
       </div>
     </section>
 
-    <section class="course-map section-pad" id="trilha" aria-labelledby="trailTitle">
+    <section class="course-map section-pad cine-scene" id="trilha" data-cinematic-scene="trilha" aria-labelledby="trailTitle">
       <div class="shell">
         <header class="section-heading reveal">
           <div class="section-index"><span>02</span><i></i><small>Trilha</small></div>
@@ -179,13 +196,14 @@
           <svg class="route-line" viewBox="0 0 1200 520" preserveAspectRatio="none" aria-hidden="true">
             <path class="route-shadow" d="M30 410 C150 110 320 90 420 275 S670 520 790 260 S1030 20 1170 170"/>
             <path class="route-track" d="M30 410 C150 110 320 90 420 275 S670 520 790 260 S1030 20 1170 170"/>
+            <path class="route-glow" d="M30 410 C150 110 320 90 420 275 S670 520 790 260 S1030 20 1170 170"/>
           </svg>
           <div class="module-grid" id="moduleGrid"></div>
         </div>
       </div>
     </section>
 
-    <section class="briefing-section section-pad" id="ementa" aria-labelledby="briefingTitle">
+    <section class="briefing-section section-pad cine-scene" id="ementa" data-cinematic-scene="ementa" aria-labelledby="briefingTitle">
       <div class="briefing-photo" id="briefingPhoto" aria-hidden="true"></div>
       <div class="shell briefing-layout">
         <div class="section-index light reveal"><span>03</span><i></i><small>Briefing</small></div>
@@ -199,7 +217,7 @@
       </div>
     </section>
 
-    <section class="materials-section section-pad" id="materiais" aria-labelledby="materialsTitle">
+    <section class="materials-section section-pad cine-scene" id="materiais" data-cinematic-scene="materiais" aria-labelledby="materialsTitle">
       <div class="shell">
         <header class="section-heading reveal">
           <div class="section-index"><span>04</span><i></i><small>Acervo</small></div>
@@ -227,7 +245,7 @@
       </div>
     </section>
 
-    <section class="presentation-section section-pad" id="apresentacao" aria-labelledby="presentationTitle">
+    <section class="presentation-section section-pad cine-scene" id="apresentacao" data-cinematic-scene="apresentacao" aria-labelledby="presentationTitle">
       <div class="presentation-orbit" aria-hidden="true"><span></span><i></i><b></b></div>
       <div class="shell presentation-layout">
         <div class="section-index light reveal"><span>05</span><i></i><small>Sua vez</small></div>

@@ -164,7 +164,6 @@
       window.CourseStore.save(state);
       course = window.CourseStore.getCourse(state, requestedCode);
       renderCourse();
-      window.requestAnimationFrame(() => $$('.reveal').forEach((item) => item.classList.add('in-view')));
     } catch (error) {
       console.warn('Catálogo SQLite indisponível; usando as disciplinas locais.', error);
     }
@@ -428,15 +427,57 @@
 
   function setupMotion() {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const revealObserver = new IntersectionObserver((entries) => {
+    const root = document.documentElement;
+    const hero = $('.cinematic-hero');
+    const route = $('.course-map');
+    const routeGlow = $('.route-glow');
+    const briefing = $('.briefing-section');
+    const presentation = $('.presentation-section');
+    const scenes = $$('[data-cinematic-scene]');
+    const chapterLinks = $$('[data-cinematic-link]');
+    const observed = new WeakSet();
+
+    const revealObserver = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in-view');
-          revealObserver.unobserve(entry.target);
-        }
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('in-view');
+        revealObserver.unobserve(entry.target);
       });
-    }, { threshold: .12 });
-    $$('.reveal').forEach((item) => revealObserver.observe(item));
+    }, { threshold: .12, rootMargin: '0px 0px -7% 0px' }) : null;
+
+    function registerReveals(scope = document) {
+      const candidates = [];
+      if (scope.matches?.('.reveal')) candidates.push(scope);
+      candidates.push(...(scope.querySelectorAll?.('.reveal') || []));
+      candidates.forEach((item) => {
+        if (observed.has(item)) return;
+        observed.add(item);
+        if (reduced || !revealObserver) item.classList.add('in-view');
+        else revealObserver.observe(item);
+      });
+    }
+
+    registerReveals();
+    const revealMutationObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) registerReveals(node);
+      }));
+    });
+    revealMutationObserver.observe($('#conteudo'), { childList: true, subtree: true });
+
+    let routeLength = 0;
+    if (routeGlow) {
+      routeLength = routeGlow.getTotalLength();
+      routeGlow.style.strokeDasharray = `${routeLength}`;
+      routeGlow.style.strokeDashoffset = `${routeLength}`;
+    }
+
+    function sectionProgress(element, start = .82, end = .18) {
+      if (!element) return 0;
+      const rect = element.getBoundingClientRect();
+      const travel = window.innerHeight * (start - end) + rect.height;
+      return Math.min(1, Math.max(0, (window.innerHeight * start - rect.top) / travel));
+    }
 
     let ticking = false;
     function updateScroll() {
@@ -444,15 +485,67 @@
       const progress = max > 0 ? window.scrollY / max : 0;
       $('#scrollProgress').style.width = `${Math.min(100, progress * 100)}%`;
       $('#siteHeader').classList.toggle('compact', window.scrollY > 40);
-      if (!reduced) document.documentElement.style.setProperty('--hero-shift', Math.min(80, window.scrollY * .075));
+      root.style.setProperty('--cine-progress', progress.toFixed(4));
+
+      if (!reduced) {
+        const heroExit = Math.min(1, window.scrollY / Math.max(1, hero.offsetHeight * .82));
+        root.style.setProperty('--hero-exit', heroExit.toFixed(4));
+        root.style.setProperty('--hero-shift', Math.min(135, window.scrollY * .13).toFixed(2));
+        root.style.setProperty('--hero-zoom', (heroExit * .1).toFixed(4));
+
+        const briefingProgress = sectionProgress(briefing, .95, .05);
+        root.style.setProperty('--briefing-shift', ((briefingProgress - .5) * 92).toFixed(2));
+
+        const presentationProgress = sectionProgress(presentation, .9, .1);
+        root.style.setProperty('--orbit-turn', `${(presentationProgress * 48).toFixed(2)}deg`);
+
+        if (routeGlow && routeLength) {
+          const routeProgress = sectionProgress(route, .82, .34);
+          routeGlow.style.strokeDashoffset = `${routeLength * (1 - routeProgress)}`;
+        }
+      }
+
+      const focusLine = window.innerHeight * .43;
+      let activeScene = scenes[0];
+      let activeDistance = Number.POSITIVE_INFINITY;
+      scenes.forEach((scene) => {
+        const rect = scene.getBoundingClientRect();
+        const containsFocus = rect.top <= focusLine && rect.bottom >= focusLine;
+        const distance = containsFocus ? 0 : Math.min(Math.abs(rect.top - focusLine), Math.abs(rect.bottom - focusLine));
+        scene.style.setProperty('--scene-proximity', String(Math.max(0, 1 - distance / window.innerHeight)));
+        scene.classList.toggle('scene-active', containsFocus);
+        if (distance < activeDistance) {
+          activeDistance = distance;
+          activeScene = scene;
+        }
+      });
+      chapterLinks.forEach((link) => {
+        link.classList.toggle('active', link.dataset.cinematicLink === activeScene?.id);
+      });
       ticking = false;
     }
-    window.addEventListener('scroll', () => {
+
+    function scheduleScrollUpdate() {
       if (!ticking) {
         window.requestAnimationFrame(updateScroll);
         ticking = true;
       }
-    }, { passive: true });
+    }
+
+    window.addEventListener('scroll', scheduleScrollUpdate, { passive: true });
+    window.addEventListener('resize', scheduleScrollUpdate, { passive: true });
+    if (!reduced && hero) {
+      hero.addEventListener('pointermove', (event) => {
+        const bounds = hero.getBoundingClientRect();
+        root.style.setProperty('--pointer-x', (((event.clientX - bounds.left) / bounds.width) * 2 - 1).toFixed(3));
+        root.style.setProperty('--pointer-y', (((event.clientY - bounds.top) / bounds.height) * 2 - 1).toFixed(3));
+      }, { passive: true });
+      hero.addEventListener('pointerleave', () => {
+        root.style.setProperty('--pointer-x', '0');
+        root.style.setProperty('--pointer-y', '0');
+      }, { passive: true });
+    }
+    document.body.classList.add('cinematic-ready');
     updateScroll();
   }
 
