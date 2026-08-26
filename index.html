@@ -147,7 +147,20 @@
               </section>
             </div>
             <footer class="call-actions">
-              <p><span class="live-dot" aria-hidden="true"></span><strong id="classCountdown">Amanhã</strong> · pauta atualizada automaticamente</p>
+              <div class="class-access-stack">
+                <p><span class="live-dot" aria-hidden="true"></span><strong id="classCountdown">Amanhã</strong> · pauta atualizada automaticamente</p>
+                <div class="meeting-gate" id="meetingGate">
+                  <button class="meeting-locked protected-action" id="meetingLockedButton" data-action="meeting" type="button">
+                    <span aria-hidden="true">⌁</span>
+                    <span><strong>Acessar aula online</strong><small id="meetingStatus">Entre para revelar o link protegido</small></span>
+                  </button>
+                  <a class="meeting-link" id="meetingLink" href="#" target="_blank" rel="noopener noreferrer" hidden>
+                    <span class="meeting-camera" aria-hidden="true"></span>
+                    <span><strong>Entrar no Google Meet</strong><small>Credencial validada para esta aula</small></span>
+                    <b aria-hidden="true">↗</b>
+                  </a>
+                </div>
+              </div>
               <button class="primary-button protected-action" data-action="upload">Enviar material da aula <span aria-hidden="true">↗</span></button>
             </footer>
           </div>
@@ -273,16 +286,27 @@
   </footer>
 
   <dialog class="app-dialog access-dialog" id="accessDialog">
-    <form method="dialog" class="dialog-card" id="accessForm">
+    <form method="dialog" class="dialog-card access-card" id="accessForm">
       <button class="dialog-close" type="button" data-close="accessDialog" aria-label="Fechar">×</button>
-      <span class="eyebrow">Acesso da turma</span>
-      <h2>Confirme sua matrícula</h2>
-      <p>Use o Nº USP e o e-mail que a professora cadastrou nesta disciplina.</p>
-      <label>Número USP<input name="nusp" inputmode="numeric" autocomplete="username" placeholder="Ex.: 12345678" required pattern="[0-9]{7,10}"></label>
-      <label>E-mail USP<input name="email" type="email" autocomplete="email" placeholder="voce@usp.br" required></label>
-      <p class="form-hint">Para testar: <strong>12345678</strong> e <strong>ana.souza@usp.br</strong></p>
+      <div class="credential-head">
+        <span class="credential-pulse" aria-hidden="true"></span>
+        <span>Acesso protegido · <b id="accessCourseCode">PEA5004</b></span>
+        <small>Token 12h</small>
+      </div>
+      <span class="eyebrow">Credencial da turma</span>
+      <h2>Entre na rota.</h2>
+      <p>Informe um dos dados cadastrados pela professora. Após a validação, uma credencial temporária libera o Meet e os materiais da disciplina.</p>
+      <label class="access-identity-field">E-mail ou Número USP
+        <input name="identifier" autocomplete="username" placeholder="voce@usp.br ou 12345678" required>
+      </label>
+      <div class="token-contract" aria-label="Detalhes da sessão">
+        <span><small>Validade</small><strong>12 horas</strong></span>
+        <span><small>Escopo</small><strong id="accessScope">Esta disciplina</strong></span>
+        <span><small>Proteção</small><strong>Token individual</strong></span>
+      </div>
+      <p class="form-hint">Ambiente de demonstração: use <strong>12345678</strong> ou <strong>ana.souza@usp.br</strong>.</p>
       <p class="form-error" id="accessError" role="alert"></p>
-      <button class="primary-button" value="default" type="submit">Entrar na disciplina</button>
+      <button class="primary-button access-submit" value="default" type="submit"><span>Gerar credencial e entrar</span><b aria-hidden="true">→</b></button>
     </form>
   </dialog>
 
@@ -292,8 +316,12 @@
       <span class="eyebrow">Reserva de apresentação</span>
       <h2>Sua cena no semestre</h2>
       <div class="form-columns">
-        <label>Etapa<select name="module" id="moduleSelect" required></select></label>
+        <label>Tipo de apresentação<select name="kind" id="presentationKind" required><option value="article">Artigo da aula</option><option value="final">Trabalho final</option></select></label>
+        <label>Artigo ou aula<select name="target_id" id="presentationTargetSelect" required></select></label>
+      </div>
+      <div class="form-columns">
         <label>Nome do grupo<input name="group" placeholder="Ex.: Grupo Farol" required></label>
+        <label>Tema do trabalho<input name="topic" placeholder="Obrigatório para trabalho final"></label>
       </div>
       <label>Integrantes<textarea name="members" rows="3" placeholder="Nome e Nº USP, um por linha" required></textarea></label>
       <label>Link dos slides no Drive<input name="slides" type="url" placeholder="https://drive.google.com/..."></label>
@@ -309,8 +337,9 @@
       <p>Envie slides, resenha ou material de apoio. A professora verá o arquivo, o aluno e a aula vinculada no painel.</p>
       <div class="form-columns">
         <label>Aula<select name="session_id" id="uploadSessionSelect" required></select></label>
-        <label>Artigo relacionado<select name="article_id" id="uploadArticleSelect"><option value="">Material geral da aula</option></select></label>
+        <label>Tipo de entrega<select name="deliverable_type_id" id="uploadDeliverableSelect" required></select></label>
       </div>
+      <label>Artigo relacionado<select name="article_id" id="uploadArticleSelect"><option value="">Material geral da aula</option></select></label>
       <label>Arquivo<input name="file" type="file" required accept=".pdf,.ppt,.pptx,.doc,.docx,.odt,.odp,.xls,.xlsx,.csv,.zip"></label>
       <label>Descrição<textarea name="description" rows="3" placeholder="Ex.: slides finais do Grupo Farol"></textarea></label>
       <p class="upload-note">Tamanho máximo: 25 MB.</p>

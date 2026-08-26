@@ -29,7 +29,7 @@ A imagem Docker escuta a porta do Railway e grava o SQLite e os materiais em um 
 - `ADMIN_PASSWORD` com uma senha forte;
 - healthcheck em `/api/health`.
 
-Sem `ADMIN_PASSWORD`, o painel administrativo fica indisponível no Railway. Localmente ele continua liberado para desenvolvimento, a menos que `ALLOW_INSECURE_ADMIN=0` seja definido.
+Sem `ADMIN_PASSWORD`, o painel administrativo fica indisponível no Railway. Localmente ele continua liberado para desenvolvimento, a menos que `ALLOW_INSECURE_ADMIN=0` seja definido. Em produção, a professora entra pelo modal do próprio site; a senha é trocada por um token administrativo temporário de 12 horas e não há mais janela nativa de HTTP Basic.
 
 ### Acesso de demonstração
 
@@ -41,15 +41,19 @@ Para entrar em PEA5004:
 ## Fluxos implementados
 
 - SQLite para disciplinas, alunos, aulas, artigos, apresentadores, sessões e materiais enviados;
-- acesso do aluno pela combinação disciplina + e-mail + Nº USP, com token de 12 horas;
+- acesso do aluno por e-mail ou Nº USP cadastrado, com token individual de 12 horas;
 - cadastro, bloqueio e importação CSV de alunos no painel docente;
 - agenda de aulas com data, horário, local, tema e observações;
 - primeiro momento da aula com profissional convidado, função e temática;
 - segundo momento com artigos e um ou mais alunos apresentadores;
 - destaque automático da próxima aula: a aula continua em evidência durante todo o seu dia e depois avança para a data futura seguinte;
-- envio autenticado de material pelo aluno, vinculado à aula e opcionalmente a um artigo, com limite de 25 MB;
+- link do Google Meet por aula, oculto do catálogo público e liberado somente após validar o token do aluno;
+- inscrição persistente de grupos para apresentação de artigos e trabalhos finais;
+- tipos de entrega configuráveis (resenha, artigo, apresentação, artigo final e novas categorias);
+- envio autenticado de material pelo aluno, vinculado ao tipo, à aula e opcionalmente a um artigo, com limite de 25 MB;
 - consulta dos materiais recebidos no painel docente;
-- cadastro de novas disciplinas e vínculo do endereço da pasta principal do Google Drive;
+- cadastro de novas disciplinas em branco ou por clonagem de agenda, temas, especialistas, artigos e tipos de entrega, com recálculo das datas;
+- vínculo do endereço da pasta principal do Google Drive;
 - seletor entre PEA5003, PEA5004, PEA5714 e novas disciplinas cadastradas;
 - capas cinematográficas, trilha, ementa, objetivos, acervo e dicas de apresentação;
 - uso da marca da Escola Politécnica da USP fornecida para o projeto.
@@ -62,9 +66,11 @@ O banco é inicializado em `server.py` com estas entidades principais:
 
 - `courses` — configuração e pasta Drive de cada disciplina;
 - `students` — nome, e-mail, Nº USP, grupo e estado de acesso;
-- `class_sessions` — calendário e especialista convidado;
+- `class_sessions` — calendário, especialista convidado e link protegido do Google Meet;
 - `articles` e `article_presenters` — leituras e alunos responsáveis;
-- `uploads` — metadados dos materiais enviados;
+- `presentation_reservations` — inscrições dos grupos em artigos e trabalhos finais;
+- `deliverable_types` — categorias de materiais configuradas pela professora;
+- `uploads` — metadados dos materiais enviados e seu tipo de entrega;
 - `auth_sessions` — tokens temporários dos alunos.
 
 As datas são avaliadas no fuso `America/Belem`, coerente com o ambiente da aplicação. Arquivos em `uploads/` não são publicados diretamente pelo servidor.

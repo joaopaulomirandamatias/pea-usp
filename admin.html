@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="admin-page">
+<body class="admin-page admin-locked">
   <a class="skip-link" href="#adminContent">Pular para o conteúdo</a>
   <div class="page-noise" aria-hidden="true"></div>
 
@@ -43,6 +43,7 @@
         <p class="admin-breadcrumb">Painel docente / <strong id="breadcrumbCode">PEA5004</strong></p>
         <div class="admin-top-actions">
           <button class="admin-button" id="previewButton">Visualizar como aluno</button>
+          <button class="admin-button" id="adminLogoutButton">Sair</button>
           <button class="admin-button primary" id="saveButton">Salvar alterações</button>
         </div>
       </header>
@@ -124,6 +125,15 @@
               <header class="panel-heading"><div><h2>Materiais enviados</h2><p>Arquivos entregues pelos alunos, vinculados à aula e ao artigo.</p></div><span class="eyebrow" id="uploadCountLabel">0 arquivos</span></header>
               <div class="admin-list" id="uploadAdminList"></div>
             </section>
+
+            <section class="admin-panel" id="tipos-entrega">
+              <header class="panel-heading"><div><h2>Tipos de entrega</h2><p>Defina as categorias que os alunos poderão selecionar ao enviar materiais.</p></div><span class="eyebrow">Configuração clonável</span></header>
+              <div class="deliverable-type-list" id="deliverableTypeList"></div>
+              <form class="deliverable-type-form" id="deliverableTypeForm">
+                <input name="name" aria-label="Nome do tipo de entrega" placeholder="Ex.: Relatório de visita técnica" required maxlength="80">
+                <button class="admin-button primary" type="submit">Adicionar tipo</button>
+              </form>
+            </section>
           </div>
 
           <aside>
@@ -183,6 +193,14 @@
       <h2>Criar uma nova rota</h2>
       <div class="form-columns"><label>Código<input name="code" placeholder="PEA0000" required maxlength="12"></label><label>Semestre<input name="semester" placeholder="1º semestre de 2027" required></label></div>
       <label>Nome da disciplina<input name="title" required></label>
+      <div class="clone-course-box">
+        <span class="eyebrow">Automação inicial</span>
+        <p>Use uma disciplina existente como matriz. Agenda, temas, especialistas e artigos serão copiados; alunos, avaliações, arquivos, links do Meet e tokens começam vazios.</p>
+        <div class="form-columns">
+          <label>Clonar estrutura de<select name="template_code" id="templateCourseSelect"><option value="">Começar em branco</option></select></label>
+          <label>Data da primeira aula<input name="first_class_date" id="firstClassDate" type="date"></label>
+        </div>
+      </div>
       <label>Link da pasta no Drive<input name="driveUrl" type="url" placeholder="https://drive.google.com/drive/folders/..."></label>
       <div class="dialog-actions"><button class="text-button" type="button" data-close="newCourseDialog">Cancelar</button><button class="primary-button" type="submit">Criar disciplina</button></div>
     </form>
@@ -199,6 +217,11 @@
         <label>Título da aula<input name="title" required></label>
         <label>Tema do dia<input name="theme" placeholder="Ex.: Panorama de riscos integrados"></label>
         <label>Local<input name="location" placeholder="PEA · Sala A2-06"></label>
+        <label class="meeting-admin-field">
+          Link do Google Meet
+          <input name="meet_url" type="url" inputmode="url" placeholder="https://meet.google.com/abc-defg-hij">
+          <small>O endereço só será revelado aos alunos cadastrados depois do login.</small>
+        </label>
         <div class="class-moment-label"><span>1º momento</span><strong>Profissional convidado</strong></div>
         <div class="form-columns"><label>Nome do especialista<input name="specialist_name"></label><label>Cargo / instituição<input name="specialist_role"></label></div>
         <label>Temática da apresentação<textarea name="specialist_topic" rows="2"></textarea></label>
@@ -218,6 +241,21 @@
         </form>
       </section>
     </div>
+  </dialog>
+
+  <dialog class="app-dialog access-dialog" id="adminLoginDialog">
+    <form class="dialog-card access-card" id="adminLoginForm">
+      <button class="dialog-close" type="button" data-close="adminLoginDialog" aria-label="Fechar">×</button>
+      <div class="credential-head"><span class="credential-pulse" aria-hidden="true"></span><span>Painel docente · PEA/EPUSP</span><small>Token 12h</small></div>
+      <span class="eyebrow">Acesso da professora</span>
+      <h2>Assuma o controle.</h2>
+      <p>Entre para gerenciar disciplinas, alunos, aulas, avaliações e materiais. O navegador não exibirá mais a janela nativa de autenticação.</p>
+      <label>Usuário<input name="username" autocomplete="username" value="professora" required></label>
+      <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+      <div class="token-contract"><span><small>Validade</small><strong>12 horas</strong></span><span><small>Área</small><strong>Painel docente</strong></span><span><small>Proteção</small><strong>Token administrativo</strong></span></div>
+      <p class="form-error" id="adminLoginError" role="alert"></p>
+      <button class="primary-button access-submit" type="submit"><span>Entrar no painel</span><b aria-hidden="true">→</b></button>
+    </form>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

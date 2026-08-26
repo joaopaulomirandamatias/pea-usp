@@ -78,6 +78,7 @@
     if (!next) {
       card.hidden = true;
       empty.hidden = false;
+      $('#meetingGate').hidden = true;
       setText('#nextClass', 'A definir');
       return;
     }
@@ -103,6 +104,57 @@
         <div><strong>${esc(article.title)}</strong><small>${esc(article.author || 'Autoria a confirmar')}</small><small class="presenter-line">${presenters ? `Apresentação: ${esc(presenters)}` : 'Apresentadores a definir'}</small></div>
       </article>`;
     }).join('') : '<p class="next-article-empty">Os artigos e apresentadores desta aula ainda serão cadastrados.</p>';
+    renderMeetingGate();
+  }
+
+  function renderMeetingGate() {
+    const gate = $('#meetingGate');
+    const locked = $('#meetingLockedButton');
+    const link = $('#meetingLink');
+    const next = remoteCourse?.next_class;
+    gate.hidden = !next;
+    link.hidden = true;
+    link.removeAttribute('href');
+    locked.hidden = false;
+    locked.disabled = false;
+    locked.classList.toggle('not-published', Boolean(next && !next.meeting_available));
+    if (!next) return;
+    if (!next.meeting_available) {
+      setText('#meetingStatus', 'A professora ainda não publicou o endereço');
+    } else if (isAuthenticated()) {
+      setText('#meetingStatus', 'Validando sua credencial temporária…');
+    } else {
+      setText('#meetingStatus', 'Entre para revelar o link protegido');
+    }
+  }
+
+  async function loadMeetingAccess({ focus = false } = {}) {
+    renderMeetingGate();
+    if (!isAuthenticated() || !remoteCourse?.next_class) return false;
+    try {
+      const result = await apiRequest(`/api/courses/${encodeURIComponent(course.code)}/meeting`);
+      const link = $('#meetingLink');
+      link.href = result.meeting.meet_url;
+      link.hidden = false;
+      $('#meetingLockedButton').hidden = true;
+      if (focus) {
+        link.focus();
+        showToast('Link da aula liberado com sua credencial temporária.');
+      }
+      return true;
+    } catch (error) {
+      if (error.status === 401) {
+        sessionStorage.removeItem(tokenKey());
+        sessionStorage.removeItem(authKey());
+        currentStudent = null;
+        updateAuthUI();
+        setText('#meetingStatus', 'Sua sessão expirou. Entre novamente para acessar.');
+      } else {
+        setText('#meetingStatus', error.message);
+        if (focus) showToast(error.message);
+      }
+      return false;
+    }
   }
 
   function renderUploadOptions() {
@@ -116,6 +168,11 @@
     };
     select.onchange = syncArticles;
     syncArticles();
+    const deliverableSelect = $('#uploadDeliverableSelect');
+    const deliverableTypes = remoteCourse?.deliverable_types || [];
+    deliverableSelect.innerHTML = deliverableTypes.length
+      ? deliverableTypes.map((item) => `<option value="${item.id}">${esc(item.name)}</option>`).join('')
+      : '<option value="">Nenhum tipo de entrega cadastrado</option>';
   }
 
   async function loadRemoteCourse() {
@@ -128,6 +185,8 @@
       setText('#syncTime', course.driveConnected ? course.updatedAt : 'Vínculo pendente');
       renderNextClass();
       renderUploadOptions();
+      renderPresentationOptions();
+      if (isAuthenticated()) await loadMeetingAccess();
     } catch (error) {
       remoteCourse = null;
       $('#nextClassCard').hidden = true;
@@ -231,14 +290,36 @@
 
   function renderPresentation() {
     $('#tipList').innerHTML = (course.presentationTips || []).map((tip) => `<li>${esc(tip)}</li>`).join('');
-    $('#moduleSelect').innerHTML = course.modules.map((module) => `<option value="${module.id}">${String(module.id).padStart(2, '0')} · ${esc(module.title)}</option>`).join('');
+    renderPresentationOptions();
+  }
+
+  function renderPresentationOptions() {
+    const kindSelect = $('#presentationKind');
+    const targetSelect = $('#presentationTargetSelect');
+    if (!kindSelect || !targetSelect) return;
+    const sessions = remoteCourse?.sessions || [];
+    const options = kindSelect.value === 'article'
+      ? sessions.flatMap((session) => (session.articles || []).map((article) => ({
+        id: article.id,
+        label: `${article.code || 'ART'} · ${article.title}`
+      })))
+      : sessions.map((session) => ({
+        id: session.id,
+        label: `${formatDatePart(session.session_date, { day: '2-digit', month: 'short' })} · ${session.title}`
+      }));
+    targetSelect.innerHTML = options.length
+      ? options.map((item) => `<option value="${item.id}">${esc(item.label)}</option>`).join('')
+      : `<option value="">${kindSelect.value === 'article' ? 'Nenhum artigo cadastrado' : 'Nenhuma aula cadastrada'}</option>`;
   }
 
   function updateAuthUI() {
     const logged = isAuthenticated();
     document.body.classList.toggle('is-authenticated', logged);
-    setText('#accessLabel', logged ? 'Aluno conectado' : 'Acessar com Nº USP');
-    $('#accessButton').setAttribute('aria-label', logged ? 'Sessão de aluno ativa' : 'Acessar com Nº USP');
+    const studentName = currentStudent?.name || sessionStorage.getItem(`${authKey()}-name`);
+    setText('#accessLabel', logged ? (studentName || 'Aluno conectado') : 'Acessar a turma');
+    $('#accessButton').setAttribute('aria-label', logged ? 'Sessão de aluno ativa' : 'Entrar com e-mail ou Nº USP');
+    setText('#accessCourseCode', course.code);
+    setText('#accessScope', course.code);
   }
 
   function renderCourse() {
@@ -288,12 +369,12 @@
 
   function openAccess() {
     if (isAuthenticated()) {
-      showToast(`Acesso ativo em ${course.code}.`);
+      showToast(`Credencial ativa em ${course.code} por até 12 horas.`);
       return;
     }
     $('#accessError').textContent = '';
     $('#accessDialog').showModal();
-    setTimeout(() => $('#accessDialog input[name="nusp"]').focus(), 0);
+    setTimeout(() => $('#accessDialog input[name="identifier"]').focus(), 0);
   }
 
   function requireAccess(action) {
@@ -326,6 +407,10 @@
       } else {
         showToast(`O Drive de ${course.code} ainda aguarda o vínculo da professora.`);
       }
+      return;
+    }
+    if (action === 'meeting') {
+      loadMeetingAccess({ focus: true });
     }
   }
 
@@ -336,14 +421,18 @@
 
     $('#accessForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const form = new FormData(event.currentTarget);
-      const nusp = String(form.get('nusp')).trim();
-      const email = String(form.get('email')).trim().toLowerCase();
+      const formElement = event.currentTarget;
+      const form = new FormData(formElement);
+      const identifier = String(form.get('identifier')).trim();
+      const submit = formElement.querySelector('button[type="submit"]');
       let student;
+      $('#accessError').textContent = '';
+      submit.disabled = true;
+      submit.classList.add('is-loading');
       try {
         const result = await apiRequest('/api/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ course_code: course.code, email, nusp })
+          body: JSON.stringify({ course_code: course.code, identifier })
         });
         student = result.student;
         currentStudent = student;
@@ -351,19 +440,28 @@
       } catch (error) {
         if (error.status && error.status !== 404) {
           $('#accessError').textContent = error.message;
+          submit.disabled = false;
+          submit.classList.remove('is-loading');
           return;
         }
-        student = course.students.find((item) => item.access && item.nusp === nusp && item.email.toLowerCase() === email);
+        student = course.students.find((item) => item.access && (item.nusp === identifier || item.email.toLowerCase() === identifier.toLowerCase()));
         if (!student) {
           $('#accessError').textContent = 'Os dados não correspondem à lista desta disciplina. Confira com a professora.';
+          submit.disabled = false;
+          submit.classList.remove('is-loading');
           return;
         }
         sessionStorage.setItem(authKey(), 'true');
       }
+      currentStudent = student;
       sessionStorage.setItem(`${authKey()}-name`, student.name);
+      submit.disabled = false;
+      submit.classList.remove('is-loading');
       $('#accessDialog').close();
+      formElement.reset();
       updateAuthUI();
-      showToast(`Bem-vindo, ${student.name}. Materiais de ${course.code} liberados.`);
+      await loadMeetingAccess();
+      showToast(`Credencial gerada para ${student.name}. Acesso válido por 12 horas.`);
       const pending = sessionStorage.getItem('rota-pending-action');
       sessionStorage.removeItem('rota-pending-action');
       if (pending) setTimeout(() => runProtectedAction(pending), 250);
@@ -371,23 +469,55 @@
   }
 
   function setupPresentation() {
-    $('#presentationForm').addEventListener('submit', (event) => {
+    $('#presentationKind').addEventListener('change', renderPresentationOptions);
+    $('#presentationForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      const form = new FormData(event.currentTarget);
+      const formElement = event.currentTarget;
+      const form = new FormData(formElement);
       const submission = {
         id: Date.now(),
-        module: Number(form.get('module')),
+        kind: String(form.get('kind')),
+        target_id: Number(form.get('target_id')),
         group: String(form.get('group')).trim(),
+        topic: String(form.get('topic')).trim(),
         members: String(form.get('members')).trim(),
         slides: String(form.get('slides')).trim(),
         createdAt: new Date().toISOString()
       };
-      course.submissions = course.submissions || [];
-      course.submissions.push(submission);
-      window.CourseStore.save(state);
+      const submit = formElement.querySelector('button[type="submit"]');
+      submit.disabled = true;
+      try {
+        await apiRequest('/api/presentations', {
+          method: 'POST',
+          body: JSON.stringify({
+            kind: submission.kind,
+            target_id: submission.target_id,
+            group_name: submission.group,
+            topic: submission.topic,
+            members: submission.members,
+            slides_url: submission.slides
+          })
+        });
+      } catch (error) {
+        if (error.status === 401) {
+          sessionStorage.removeItem(tokenKey());
+          sessionStorage.removeItem(authKey());
+          updateAuthUI();
+        }
+        if (error.status) {
+          showToast(error.message);
+          submit.disabled = false;
+          return;
+        }
+        course.submissions = course.submissions || [];
+        course.submissions.push(submission);
+        window.CourseStore.save(state);
+      }
+      submit.disabled = false;
       $('#presentationDialog').close();
-      event.currentTarget.reset();
-      showToast(`Apresentação do ${submission.group} reservada. A professora verá no painel.`);
+      formElement.reset();
+      renderPresentationOptions();
+      showToast(`Apresentação do ${submission.group} reservada. A professora já pode consultá-la.`);
     });
   }
 

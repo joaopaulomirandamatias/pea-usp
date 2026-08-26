@@ -9,6 +9,7 @@
   let remoteCourse = null;
   let editingSessionId = null;
   let toastTimer;
+  const adminTokenKey = 'rota-admin-token';
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -16,12 +17,15 @@
 
   async function apiRequest(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const adminToken = sessionStorage.getItem(adminTokenKey);
+    if (adminToken && path.startsWith('/api/admin')) headers.Authorization = `Bearer ${adminToken}`;
     const response = await fetch(path, { ...options, headers });
     let payload = {};
     try { payload = await response.json(); } catch (error) { payload = {}; }
     if (!response.ok) {
       const requestError = new Error(payload.error || `Falha na requisição (${response.status}).`);
       requestError.status = response.status;
+      if (response.status === 401 && path !== '/api/admin/login') openAdminLogin();
       throw requestError;
     }
     return payload;
@@ -42,6 +46,14 @@
     toast.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove('show'), 3600);
+  }
+
+  function openAdminLogin() {
+    const dialog = $('#adminLoginDialog');
+    document.body.classList.add('admin-locked');
+    $('#adminLoginError').textContent = '';
+    if (!dialog.open) dialog.showModal();
+    setTimeout(() => dialog.querySelector('input[name="password"]').focus(), 0);
   }
 
   function saveState(message) {
@@ -112,7 +124,7 @@
       const presenters = session.articles.flatMap((article) => article.presenters || []).map((student) => student.name);
       return `<div class="admin-list-row class-admin-row">
         <span class="class-date-chip ${dateClass}"><strong>${esc(formatClassDate(session.session_date, { day: '2-digit' }))}</strong><small>${esc(formatClassDate(session.session_date, { month: 'short' }))} · ${esc(session.start_time)}</small></span>
-        <div><strong>${esc(session.title)}</strong><small>${esc(session.theme || 'Tema a definir')} · ${session.articles.length} artigo${session.articles.length === 1 ? '' : 's'}${presenters.length ? ` · ${esc(presenters.join(', '))}` : ''}</small></div>
+        <div><strong>${esc(session.title)}</strong><small>${esc(session.theme || 'Tema a definir')} · ${session.articles.length} artigo${session.articles.length === 1 ? '' : 's'}${presenters.length ? ` · ${esc(presenters.join(', '))}` : ''}</small><span class="meet-admin-pill ${session.meet_url ? 'ready' : ''}">${session.meet_url ? 'Meet protegido configurado' : 'Meet não informado'}</span></div>
         <div class="class-specialist-summary"><span>1º momento</span><strong>${esc(session.specialist_name || 'Especialista a confirmar')}</strong><small>${esc(session.specialist_role || session.specialist_topic || '—')}</small></div>
         <div class="class-row-actions"><button class="row-action" data-edit-class="${session.id}">Editar</button><button class="row-action" data-remove-class="${session.id}" aria-label="Remover aula ${esc(session.title)}">×</button></div>
       </div>`;
@@ -160,7 +172,7 @@
     setText('#classDialogTitle', session ? 'Editar aula' : 'Nova aula');
     $('#articleManager').hidden = !session;
     if (session) {
-      ['session_date', 'start_time', 'title', 'theme', 'location', 'specialist_name', 'specialist_role', 'specialist_topic', 'notes'].forEach((field) => {
+      ['session_date', 'start_time', 'title', 'theme', 'location', 'meet_url', 'specialist_name', 'specialist_role', 'specialist_topic', 'notes'].forEach((field) => {
         form.elements[field].value = session[field] || '';
       });
       form.elements.session_id.value = session.id;
@@ -176,7 +188,7 @@
     $('#uploadAdminList').innerHTML = uploads.map((upload) => {
       const extension = upload.filename.includes('.') ? upload.filename.split('.').pop() : 'arq';
       const size = upload.size_bytes < 1024 * 1024 ? `${Math.max(1, Math.round(upload.size_bytes / 1024))} KB` : `${(upload.size_bytes / 1024 / 1024).toFixed(1)} MB`;
-      return `<div class="admin-list-row upload-admin-row"><span class="file-badge">${esc(extension)}</span><div><strong>${esc(upload.filename)}</strong><small>${esc(upload.student_name)} · ${esc(upload.description || 'Sem descrição')}</small></div><div class="upload-context"><strong>${esc(upload.session_title || 'Material geral')}</strong><br>${esc(upload.article_title || 'Sem artigo específico')}</div><div class="upload-file-actions"><span class="file-size">${size}</span><a class="row-action" href="/api/admin/uploads/${upload.id}/download">Baixar</a></div></div>`;
+      return `<div class="admin-list-row upload-admin-row"><span class="file-badge">${esc(extension)}</span><div><strong>${esc(upload.filename)}</strong><small>${esc(upload.student_name)} · ${esc(upload.deliverable_type_name || 'Tipo não informado')} · ${esc(upload.description || 'Sem descrição')}</small></div><div class="upload-context"><strong>${esc(upload.session_title || 'Material geral')}</strong><br>${esc(upload.article_title || 'Sem artigo específico')}</div><div class="upload-file-actions"><span class="file-size">${size}</span><a class="row-action" href="/api/admin/uploads/${upload.id}/download">Baixar</a></div></div>`;
     }).join('') || '<div class="admin-list-row"><span class="row-index">—</span><div><strong>Nenhum material recebido</strong><small>Os arquivos enviados pelos alunos aparecerão aqui.</small></div><span></span><span></span></div>';
   }
 
@@ -248,21 +260,45 @@
   }
 
   function renderSubmissions() {
-    const submissions = course.submissions || [];
+    const submissions = remoteCourse?.presentations || course.submissions || [];
     $('#submissionList').innerHTML = submissions.map((submission, index) => {
-      const module = course.modules.find((item) => item.id === Number(submission.module));
+      const target = remoteCourse
+        ? (submission.article_title ? `${submission.article_code || 'ART'} · ${submission.article_title}` : submission.session_title || 'Trabalho final')
+        : course.modules.find((item) => item.id === Number(submission.module))?.title || 'Etapa removida';
+      const groupName = submission.group_name || submission.group;
+      const slides = submission.slides_url || submission.slides;
       return `<div class="admin-list-row">
         <span class="row-index">${String(index + 1).padStart(2, '0')}</span>
-        <div><strong>${esc(submission.group)}</strong><small>${esc(module?.title || 'Etapa removida')} · ${esc(submission.members)}</small></div>
-        <span class="row-meta">${submission.slides ? 'Slides vinculados' : 'Slides pendentes'}</span>
-        <button class="row-action" data-remove-submission="${submission.id}" aria-label="Remover reserva do ${esc(submission.group)}">×</button>
+        <div><strong>${esc(groupName)}</strong><small>${esc(target)} · ${esc(submission.members)}${submission.topic ? ` · ${esc(submission.topic)}` : ''}</small></div>
+        <span class="row-meta">${slides ? 'Slides vinculados' : 'Slides pendentes'}</span>
+        <button class="row-action" data-remove-submission="${submission.id}" aria-label="Remover reserva do ${esc(groupName)}">×</button>
       </div>`;
     }).join('') || '<div class="admin-list-row"><span class="row-index">—</span><div><strong>Nenhuma reserva ainda</strong><small>As apresentações cadastradas pelos alunos aparecem aqui.</small></div><span></span><span></span></div>';
-    $$('[data-remove-submission]').forEach((button) => button.addEventListener('click', () => {
+    $$('[data-remove-submission]').forEach((button) => button.addEventListener('click', async () => {
+      if (remoteCourse) {
+        try {
+          await apiRequest(`/api/admin/presentations/${button.dataset.removeSubmission}`, { method: 'DELETE' });
+          await loadRemoteAdmin();
+          showToast('Reserva removida.');
+        } catch (error) { showToast(error.message); }
+        return;
+      }
       course.submissions = submissions.filter((item) => item.id !== Number(button.dataset.removeSubmission));
       saveState('Reserva removida.');
       renderSubmissions();
       renderMetrics();
+    }));
+  }
+
+  function renderDeliverableTypes() {
+    const types = remoteCourse?.deliverable_types || [];
+    $('#deliverableTypeList').innerHTML = types.map((item) => `<div class="deliverable-type-chip"><span>${esc(item.name)}</span><button type="button" data-remove-deliverable="${item.id}" aria-label="Remover ${esc(item.name)}">×</button></div>`).join('') || '<p class="next-article-empty">Nenhum tipo de entrega cadastrado.</p>';
+    $$('[data-remove-deliverable]').forEach((button) => button.addEventListener('click', async () => {
+      try {
+        await apiRequest(`/api/admin/deliverables/${button.dataset.removeDeliverable}`, { method: 'DELETE' });
+        await loadRemoteAdmin();
+        showToast('Tipo de entrega removido. Materiais antigos foram preservados.');
+      } catch (error) { showToast(error.message); }
     }));
   }
 
@@ -275,6 +311,7 @@
   async function loadRemoteAdmin() {
     try {
       remoteCourse = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`);
+      document.body.classList.remove('admin-locked');
       Object.assign(course, {
         title: remoteCourse.title,
         shortTitle: remoteCourse.short_title,
@@ -295,6 +332,8 @@
       renderClasses();
       renderStudents();
       renderUploads();
+      renderSubmissions();
+      renderDeliverableTypes();
       if ($('#classDialog').open && editingSessionId) {
         const updatedSession = remoteCourse.sessions.find((item) => item.id === editingSessionId);
         renderManagedArticles(updatedSession);
@@ -304,6 +343,7 @@
       remoteCourse = null;
       renderClasses();
       renderUploads();
+      renderDeliverableTypes();
       console.warn('Banco SQLite indisponível; painel em modo local.', error);
     }
   }
@@ -320,6 +360,7 @@
     renderStudents();
     renderSubmissions();
     renderUploads();
+    renderDeliverableTypes();
     renderPublication();
   }
 
@@ -370,6 +411,39 @@
   $('#saveButton').addEventListener('click', saveForm);
   $('#courseForm').addEventListener('submit', (event) => { event.preventDefault(); saveForm(); });
   $('#previewButton').addEventListener('click', () => window.open(`index.html?curso=${encodeURIComponent(course.code)}`, '_blank'));
+
+  $('#adminLoginForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const values = Object.fromEntries(new FormData(formElement).entries());
+    const submit = formElement.querySelector('button[type="submit"]');
+    $('#adminLoginError').textContent = '';
+    submit.disabled = true;
+    submit.classList.add('is-loading');
+    try {
+      const result = await apiRequest('/api/admin/login', {
+        method: 'POST',
+        body: JSON.stringify({ username: values.username, password: values.password })
+      });
+      sessionStorage.setItem(adminTokenKey, result.token);
+      $('#adminLoginDialog').close();
+      formElement.elements.password.value = '';
+      await loadRemoteAdmin();
+      showToast('Painel docente liberado por 12 horas.');
+    } catch (error) {
+      $('#adminLoginError').textContent = error.message;
+    } finally {
+      submit.disabled = false;
+      submit.classList.remove('is-loading');
+    }
+  });
+
+  $('#adminLogoutButton').addEventListener('click', () => {
+    sessionStorage.removeItem(adminTokenKey);
+    remoteCourse = null;
+    openAdminLogin();
+    showToast('Sessão docente encerrada.');
+  });
 
   $('#syncDriveButton').addEventListener('click', async () => {
     const url = $('#driveUrlInput').value.trim();
@@ -486,6 +560,21 @@
     renderMetrics();
   });
 
+  $('#deliverableTypeForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = String(new FormData(event.currentTarget).get('name') || '').trim();
+    if (!name) return;
+    try {
+      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/deliverables`, {
+        method: 'POST',
+        body: JSON.stringify({ name })
+      });
+      event.currentTarget.reset();
+      await loadRemoteAdmin();
+      showToast(`${name} adicionado aos tipos de entrega.`);
+    } catch (error) { showToast(error.message); }
+  });
+
   $('#importStudentsButton').addEventListener('click', () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -535,7 +624,20 @@
     input.click();
   });
 
-  $('#newCourseButton').addEventListener('click', () => $('#newCourseDialog').showModal());
+  function prepareNewCourseDialog() {
+    const templateSelect = $('#templateCourseSelect');
+    templateSelect.innerHTML = '<option value="">Começar em branco</option>' + state.courses.map((item) => `<option value="${esc(item.code)}">${esc(item.code)} · ${esc(item.shortTitle)}</option>`).join('');
+    $('#firstClassDate').required = false;
+    $('#newCourseDialog').showModal();
+  }
+
+  $('#templateCourseSelect').addEventListener('change', (event) => {
+    const cloning = Boolean(event.currentTarget.value);
+    $('#firstClassDate').required = cloning;
+    if (cloning && !$('#firstClassDate').value) $('#firstClassDate').focus();
+  });
+
+  $('#newCourseButton').addEventListener('click', prepareNewCourseDialog);
   $('#newCourseForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -544,7 +646,10 @@
       showToast(`${code} já está cadastrada.`);
       return;
     }
+    const template = state.courses.find((item) => item.code === values.template_code);
+    const templateCopy = template ? structuredClone(template) : {};
     const newCourse = {
+      ...templateCopy,
       code,
       title: values.title.trim(),
       shortTitle: values.title.trim(),
@@ -563,21 +668,36 @@
       driveUrl: values.driveUrl.trim(),
       driveConnected: Boolean(values.driveUrl.trim()),
       driveEmail: 'lidia.rebello.dias@usp.br',
-      description: 'Uma nova rota de aprendizagem está sendo preparada.',
-      ementa: 'Cadastre a ementa desta disciplina.',
-      objectives: ['Cadastrar o primeiro objetivo de aprendizagem.'],
-      folders: [
+      description: templateCopy.description || 'Uma nova rota de aprendizagem está sendo preparada.',
+      ementa: templateCopy.ementa || 'Cadastre a ementa desta disciplina.',
+      objectives: templateCopy.objectives || ['Cadastrar o primeiro objetivo de aprendizagem.'],
+      folders: templateCopy.folders || [
         { name: '01. Sobre o curso', detail: 'Ementa e cronograma', count: 0 },
         { name: '02. Textos', detail: 'Leituras de apoio', count: 0 },
         { name: '03. Entregas', detail: 'Trabalhos da turma', count: 0 }
       ],
-      modules: [], readings: [], presentationTips: ['Abra com o problema.'], students: [], submissions: []
+      modules: templateCopy.modules || [],
+      readings: templateCopy.readings || [],
+      presentationTips: templateCopy.presentationTips || ['Abra com o problema.'],
+      students: [],
+      submissions: []
     };
+    let cloned = { sessions: 0, articles: 0 };
     try {
-      await apiRequest('/api/admin/courses', {
+      const result = await apiRequest('/api/admin/courses', {
         method: 'POST',
-        body: JSON.stringify({ code, title: newCourse.title, short_title: newCourse.shortTitle, semester: newCourse.semester, cover: newCourse.cover, drive_url: newCourse.driveUrl })
+        body: JSON.stringify({
+          code,
+          title: newCourse.title,
+          short_title: newCourse.shortTitle,
+          semester: newCourse.semester,
+          cover: newCourse.cover,
+          drive_url: newCourse.driveUrl,
+          template_code: values.template_code,
+          first_class_date: values.first_class_date
+        })
       });
+      cloned = result.cloned || cloned;
     } catch (error) {
       if (error.status !== 404) { showToast(error.message); return; }
     }
@@ -589,7 +709,7 @@
     currentCode = code;
     renderAll();
     await loadRemoteAdmin();
-    showToast(`${code} criada como rascunho.`);
+    showToast(template ? `${code} criada com ${cloned.sessions} aulas e ${cloned.articles} artigos clonados.` : `${code} criada como rascunho.`);
   });
 
   $$('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
