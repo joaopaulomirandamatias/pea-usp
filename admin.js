@@ -109,17 +109,49 @@
     $$('.admin-course-tab:not(:disabled)').forEach((button) => button.addEventListener('click', () => selectCourse(button.dataset.course)));
   }
 
+  function mergeCourseCatalog(catalog) {
+    catalog.forEach((item) => {
+      const existing = state.courses.find((local) => local.code === item.code);
+      const serverFields = {
+        code: item.code, title: item.title, shortTitle: item.short_title, semester: item.semester,
+        status: item.status, visibility: item.visibility, updatedAt: item.updated_at,
+        cover: item.cover || existing?.cover || 'assets/course-pea5004.webp',
+        driveUrl: item.drive_url ?? existing?.driveUrl ?? '', driveConnected: Boolean(item.drive_connected)
+      };
+      if (existing) {
+        Object.assign(existing, serverFields);
+        return;
+      }
+      state.courses.push({
+        ...serverFields, progress: 0, credits: 4, workload: '60 h', classDay: 'A definir', room: 'A definir',
+        professor: 'Profa. Dra. Lídia Rebello Dias', accent: '#56d6ca', driveEmail: 'lidia.rebello.dias@usp.br',
+        description: 'Uma nova rota de aprendizagem.', ementa: 'Cadastre a ementa desta disciplina.',
+        objectives: ['Cadastrar o primeiro objetivo.'],
+        folders: [{ name: '01. Sobre o curso', detail: 'Ementa e cronograma', count: 0 }],
+        modules: [], readings: [], presentationTips: ['Abra com o problema.'], students: [], submissions: []
+      });
+    });
+    window.CourseStore.save(state);
+  }
+
+  async function syncAdminCatalog() {
+    const authenticated = Boolean(sessionStorage.getItem(adminTokenKey));
+    const catalog = await apiRequest(authenticated ? '/api/admin/courses' : '/api/courses');
+    mergeCourseCatalog(catalog);
+    return catalog;
+  }
+
   function renderMetrics() {
     const remoteStudents = remoteCourse?.students || [];
     const activeStudents = remoteCourse ? remoteStudents.filter((student) => student.active).length : course.students.filter((student) => student.access).length;
-    const driveItems = course.folders.reduce((sum, folder) => sum + Number(folder.count || 0), 0);
+    const driveItems = remoteCourse?.stats?.drive_items ?? course.folders.reduce((sum, folder) => sum + Number(folder.count || 0), 0);
     const submissions = course.submissions || [];
     setText('#studentMetric', activeStudents);
     setText('#studentMetricDetail', `${remoteCourse ? remoteStudents.length : course.students.length} na lista atual`);
     setText('#moduleMetric', remoteCourse?.stats?.classes ?? course.modules.length);
     setText('#moduleMetricDetail', remoteCourse?.next_class ? `${formatClassDate(remoteCourse.next_class.session_date, { day: '2-digit', month: 'short' })} · próxima aula` : 'nenhuma aula futura');
     setText('#driveMetric', driveItems);
-    setText('#driveMetricDetail', course.driveConnected ? 'itens sincronizados' : 'vínculo pendente');
+    setText('#driveMetricDetail', remoteCourse?.drive_sync_status === 'syncing' ? 'sincronizando agora' : course.driveConnected ? 'itens sincronizados' : 'sincronização pendente');
     setText('#submissionMetric', remoteCourse?.stats?.uploads ?? submissions.length);
     setText('#submissionMetricDetail', remoteCourse ? 'materiais recebidos' : (submissions.length === 1 ? 'grupo reservado' : 'grupos reservados'));
   }
@@ -232,13 +264,24 @@
   }
 
   function renderDrive() {
-    const connected = Boolean(course.driveConnected && course.driveUrl);
-    setText('#driveStatusLabel', connected ? 'Conectado' : 'Aguardando vínculo');
-    setText('#driveStateTitle', connected ? 'Pasta sincronizada' : 'Pasta não vinculada');
-    setText('#driveStateDetail', connected ? course.driveEmail : 'Cole o link da pasta principal');
+    const status = remoteCourse?.drive_sync_status || (course.driveConnected ? 'synced' : 'pending');
+    const connected = status === 'synced' && Boolean(course.driveUrl);
+    const syncing = status === 'syncing';
+    const materials = remoteCourse?.drive_materials || [];
+    const statusLabels = { synced: 'Sincronizado', syncing: 'Sincronizando', error: 'Falha no vínculo', credentials_required: 'Credencial necessária', pending: 'Aguardando vínculo' };
+    setText('#driveStatusLabel', statusLabels[status] || 'Aguardando vínculo');
+    setText('#driveStateTitle', connected ? `${materials.length} arquivo${materials.length === 1 ? '' : 's'} no sistema` : syncing ? 'Copiando materiais do Drive' : course.driveUrl ? 'Pasta cadastrada, ainda não sincronizada' : 'Pasta não vinculada');
+    const serviceEmail = remoteCourse?.drive_service_account_email;
+    setText('#driveStateDetail', serviceEmail ? `Compartilhe a pasta com ${serviceEmail}` : remoteCourse?.drive_sync_configured ? 'Acesso Google configurado no servidor' : 'Configure a conta de serviço no Railway');
     $('#driveUrlInput').value = course.driveUrl || '';
-    $('#driveFolderList').innerHTML = course.folders.map((folder) => `<div class="drive-folder"><span>${esc(folder.name)}</span><span>${connected ? '✓ ' + folder.count : '—'}</span></div>`).join('');
-    $('#syncDriveButton').textContent = connected ? 'Sincronizar agora' : 'Conectar pasta';
+    $('#driveFolderList').innerHTML = materials.slice(0, 8).map((item) => `<div class="drive-folder"><span>${esc(item.relative_path ? `${item.relative_path} / ${item.name}` : item.name)}</span><span>✓</span></div>`).join('') || course.folders.map((folder) => `<div class="drive-folder"><span>${esc(folder.name)}</span><span>—</span></div>`).join('');
+    const message = remoteCourse?.drive_sync_error
+      || (remoteCourse?.drive_last_synced_at ? `Última sincronização: ${new Date(`${remoteCourse.drive_last_synced_at}Z`).toLocaleString('pt-BR')}. Os arquivos ficam no armazenamento persistente da plataforma.`
+        : serviceEmail ? `Compartilhe a pasta com ${serviceEmail} e clique em sincronizar.` : 'A sincronização exige GOOGLE_SERVICE_ACCOUNT_JSON no Railway. O link sozinho não libera uma pasta privada.');
+    setText('#driveSyncMessage', message);
+    $('#driveSyncMessage').classList.toggle('error', status === 'error' || status === 'credentials_required');
+    $('#syncDriveButton').textContent = syncing ? 'Sincronizando…' : connected ? 'Sincronizar alterações' : 'Validar e sincronizar';
+    $('#syncDriveButton').disabled = syncing;
   }
 
   function renderClasses() {
@@ -335,7 +378,7 @@
     $('#uploadAdminList').innerHTML = uploads.map((upload) => {
       const extension = upload.filename.includes('.') ? upload.filename.split('.').pop() : 'arq';
       const size = upload.size_bytes < 1024 * 1024 ? `${Math.max(1, Math.round(upload.size_bytes / 1024))} KB` : `${(upload.size_bytes / 1024 / 1024).toFixed(1)} MB`;
-      return `<div class="admin-list-row upload-admin-row"><span class="file-badge">${esc(extension)}</span><div><strong>${esc(upload.filename)}</strong><small>${esc(upload.student_name)} · ${esc(upload.deliverable_type_name || 'Tipo não informado')} · ${esc(upload.description || 'Sem descrição')}</small></div><div class="upload-context"><strong>${esc(upload.session_title || 'Material geral')}</strong><br>${esc(upload.article_title || 'Sem artigo específico')}</div><div class="upload-file-actions"><span class="file-size">${size}</span><button class="row-action" type="button" data-download-upload="${upload.id}">Baixar</button></div></div>`;
+      return `<div class="admin-list-row upload-admin-row"><span class="file-badge">${esc(extension)}</span><div><strong>${esc(upload.filename)}</strong><small>${esc(upload.student_name)} · ${esc(upload.deliverable_type_name || 'Tipo não informado')} · ${esc(upload.description || 'Sem descrição')}</small></div><div class="upload-context"><strong>${esc(upload.assessment_title || upload.session_title || 'Material geral')}</strong><br>${esc(upload.article_title || (upload.assessment_title ? 'Entrega de atividade' : 'Sem artigo específico'))}</div><div class="upload-file-actions"><span class="file-size">${size}</span><button class="row-action" type="button" data-download-upload="${upload.id}">Baixar</button></div></div>`;
     }).join('') || '<div class="admin-list-row"><span class="row-index">—</span><div><strong>Nenhum material recebido</strong><small>Os arquivos enviados pelos alunos aparecerão aqui.</small></div><span></span><span></span></div>';
     $$('[data-download-upload]').forEach((button) => button.addEventListener('click', async () => {
       const upload = uploads.find((item) => item.id === Number(button.dataset.downloadUpload));
@@ -476,6 +519,10 @@
 
   function renderDeliverableTypes() {
     const types = remoteCourse?.deliverable_types || [];
+    const assessmentType = $('#assessmentDeliverableType');
+    const selectedType = assessmentType.value;
+    assessmentType.innerHTML = '<option value="">Selecione um tipo</option>' + types.map((item) => `<option value="${item.id}">${esc(item.name)}</option>`).join('');
+    if (types.some((item) => String(item.id) === selectedType)) assessmentType.value = selectedType;
     $('#deliverableTypeList').innerHTML = types.map((item) => `<div class="deliverable-type-chip"><span>${esc(item.name)}</span><button type="button" data-remove-deliverable="${item.id}" aria-label="Remover ${esc(item.name)}">×</button></div>`).join('') || '<p class="next-article-empty">Nenhum tipo de entrega cadastrado.</p>';
     $$('[data-remove-deliverable]').forEach((button) => button.addEventListener('click', async () => {
       try {
@@ -513,6 +560,7 @@
     $('#assessmentList').innerHTML = assessments.map((assessment, index) => {
       const grades = new Map((assessment.grades || []).map((grade) => [Number(grade.student_id), grade]));
       const kindOptions = Object.entries(assessmentKinds).map(([value, label]) => `<option value="${value}" ${assessment.kind === value ? 'selected' : ''}>${esc(label)}</option>`).join('');
+      const deliverableOptions = '<option value="">Sem arquivo obrigatório</option>' + (remoteCourse?.deliverable_types || []).map((item) => `<option value="${item.id}" ${Number(assessment.deliverable_type_id) === Number(item.id) ? 'selected' : ''}>${esc(item.name)}</option>`).join('');
       const roster = students.map((student) => {
         const grade = grades.get(Number(student.id));
         const summary = summaries[String(student.id)];
@@ -531,6 +579,9 @@
           <label>Máxima<input name="max_score" type="number" min="0.1" max="1000" step="0.1" value="${assessment.max_score}" required></label>
           <label>Peso<input name="weight" type="number" min="0" max="100" step="0.1" value="${assessment.weight}" required></label>
           <label>Prazo<input name="due_at" type="datetime-local" value="${esc(assessment.due_at || '')}"></label>
+          <label class="assessment-settings-upload"><input name="requires_upload" type="checkbox" ${assessment.requires_upload ? 'checked' : ''}> Exigir arquivo</label>
+          <label>Tipo de entrega<select name="deliverable_type_id">${deliverableOptions}</select></label>
+          <label class="assessment-settings-instructions">Orientações<textarea name="instructions" rows="2" placeholder="Instruções mostradas ao aluno">${esc(assessment.instructions || '')}</textarea></label>
           <label class="assessment-active"><input name="active" type="checkbox" ${assessment.active ? 'checked' : ''}> Ativa</label>
           <button class="admin-button" type="submit">Salvar</button><button class="row-action" type="button" data-remove-assessment="${assessment.id}">Excluir</button>
         </form>
@@ -542,6 +593,8 @@
       event.preventDefault();
       const values = Object.fromEntries(new FormData(form).entries());
       values.active = form.elements.active.checked;
+      values.requires_upload = form.elements.requires_upload.checked;
+      if (!values.requires_upload) values.deliverable_type_id = '';
       try {
         await apiRequest(`/api/admin/assessments/${form.dataset.assessmentSettings}`, { method: 'PUT', body: JSON.stringify(values) });
         await loadRemoteAdmin();
@@ -570,8 +623,10 @@
 
   function renderPublication() {
     setText('#publishState', course.status === 'Publicada' ? 'Disciplina publicada' : course.status === 'Arquivada' ? 'Disciplina arquivada' : 'Rascunho privado');
-    setText('#publishDetail', course.visibility);
-    setText('#togglePublishButton', course.status === 'Publicada' ? 'Voltar para rascunho' : 'Publicar disciplina');
+    setText('#publishDetail', course.status === 'Arquivada' ? 'Somente a professora pode acessar' : course.visibility);
+    setText('#togglePublishButton', course.status === 'Publicada' ? 'Voltar para rascunho' : course.status === 'Arquivada' ? 'Reabrir como rascunho' : 'Publicar disciplina');
+    $('#archiveCourseButton').disabled = course.status === 'Arquivada';
+    $('#archiveCourseButton').textContent = course.status === 'Arquivada' ? 'Disciplina já arquivada' : 'Arquivar disciplina finalizada';
   }
 
   async function loadRemoteAdmin() {
@@ -810,6 +865,8 @@
       currentTeacher = result.teacher || null;
       $('#adminLoginDialog').close();
       formElement.elements.password.value = '';
+      await syncAdminCatalog();
+      course = state.courses.find((item) => item.code === currentCode) || state.courses[0];
       await loadRemoteAdmin();
       showToast('Painel docente liberado por 12 horas.');
     } catch (error) {
@@ -835,25 +892,50 @@
       $('#driveUrlInput').focus();
       return;
     }
-    course.driveUrl = url;
-    course.driveConnected = true;
-    saveState();
+    const button = $('#syncDriveButton');
+    button.disabled = true;
+    button.textContent = 'Sincronizando…';
     try {
-      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`, { method: 'PUT', body: JSON.stringify({ driveUrl: url }) });
+      if (url !== course.driveUrl || !remoteCourse?.drive_url) {
+        await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`, { method: 'PUT', body: JSON.stringify({ driveUrl: url }) });
+      }
+      course.driveUrl = url;
+      saveState();
+      const result = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/drive/sync`, { method: 'POST', body: '{}' });
       await loadRemoteAdmin();
-      showToast('Drive conectado e salvo no SQLite.');
-    } catch (error) { showToast(error.message); }
+      showToast(`${result.count} arquivo${result.count === 1 ? '' : 's'} sincronizado${result.count === 1 ? '' : 's'} no armazenamento da plataforma.`);
+    } catch (error) {
+      await loadRemoteAdmin();
+      showToast(error.message);
+    } finally {
+      button.disabled = false;
+      renderDrive();
+    }
   });
 
   $('#togglePublishButton').addEventListener('click', async () => {
-    course.status = course.status === 'Publicada' ? 'Rascunho' : 'Publicada';
-    saveState();
+    const nextStatus = course.status === 'Publicada' || course.status === 'Arquivada' ? 'Rascunho' : 'Publicada';
     try {
-      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`, { method: 'PUT', body: JSON.stringify({ status: course.status }) });
+      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`, { method: 'PUT', body: JSON.stringify({ status: nextStatus }) });
+      course.status = nextStatus;
+      saveState();
       await loadRemoteAdmin();
-      showToast(course.status === 'Publicada' ? 'Disciplina publicada para a turma.' : 'Disciplina movida para rascunho.');
+      showToast(nextStatus === 'Publicada' ? 'Disciplina publicada para a turma.' : 'Disciplina movida para rascunho privado.');
     } catch (error) { showToast(error.message); }
     renderAll();
+  });
+
+  $('#cloneCurrentCourseButton').addEventListener('click', () => prepareNewCourseDialog(course.code));
+  $('#archiveCourseButton').addEventListener('click', async () => {
+    if (course.status === 'Arquivada') return;
+    if (!window.confirm(`Arquivar ${course.code}? Ela sairá do site e as sessões dos alunos e especialistas serão encerradas.`)) return;
+    try {
+      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`, { method: 'PUT', body: JSON.stringify({ status: 'Arquivada' }) });
+      course.status = 'Arquivada';
+      saveState();
+      await loadRemoteAdmin();
+      showToast(`${course.code} foi arquivada. O conteúdo permanece disponível somente no painel docente.`);
+    } catch (error) { showToast(error.message); }
   });
 
   $('#addModuleButton').addEventListener('click', () => $('#moduleDialog').showModal());
@@ -1027,9 +1109,26 @@
     } catch (error) { showToast(error.message); }
   });
 
+  const assessmentUploadToggle = $('#assessmentForm').elements.requires_upload;
+  const assessmentDeliverableSelect = $('#assessmentForm').elements.deliverable_type_id;
+  const syncAssessmentUploadControls = () => {
+    assessmentDeliverableSelect.disabled = !assessmentUploadToggle.checked;
+    assessmentDeliverableSelect.required = assessmentUploadToggle.checked;
+    if (!assessmentUploadToggle.checked) assessmentDeliverableSelect.value = '';
+  };
+  assessmentUploadToggle.addEventListener('change', syncAssessmentUploadControls);
+  syncAssessmentUploadControls();
+
   $('#assessmentForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    values.requires_upload = event.currentTarget.elements.requires_upload.checked;
+    if (values.requires_upload && !values.deliverable_type_id) {
+      showToast('Escolha o tipo de arquivo que o aluno deverá entregar.');
+      event.currentTarget.elements.deliverable_type_id.focus();
+      return;
+    }
+    if (!values.requires_upload) values.deliverable_type_id = '';
     try {
       await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/assessments`, {
         method: 'POST', body: JSON.stringify(values)
@@ -1132,11 +1231,13 @@
     input.click();
   });
 
-  function prepareNewCourseDialog() {
+  function prepareNewCourseDialog(templateCode = '') {
     const templateSelect = $('#templateCourseSelect');
     templateSelect.innerHTML = '<option value="">Começar em branco</option>' + state.courses.map((item) => `<option value="${esc(item.code)}">${esc(item.code)} · ${esc(item.shortTitle)}</option>`).join('');
-    $('#firstClassDate').required = false;
+    templateSelect.value = state.courses.some((item) => item.code === templateCode) ? templateCode : '';
+    $('#firstClassDate').required = Boolean(templateSelect.value);
     $('#newCourseDialog').showModal();
+    if (templateSelect.value) $('#firstClassDate').focus();
   }
 
   $('#templateCourseSelect').addEventListener('change', (event) => {
@@ -1145,7 +1246,7 @@
     if (cloning && !$('#firstClassDate').value) $('#firstClassDate').focus();
   });
 
-  $('#newCourseButton').addEventListener('click', prepareNewCourseDialog);
+  $('#newCourseButton').addEventListener('click', () => prepareNewCourseDialog());
   $('#newCourseForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -1174,7 +1275,7 @@
       cover: 'assets/course-pea5004.webp',
       accent: '#56d6ca',
       driveUrl: values.driveUrl.trim(),
-      driveConnected: Boolean(values.driveUrl.trim()),
+      driveConnected: false,
       driveEmail: 'lidia.rebello.dias@usp.br',
       description: templateCopy.description || 'Uma nova rota de aprendizagem está sendo preparada.',
       ementa: templateCopy.ementa || 'Cadastre a ementa desta disciplina.',
@@ -1242,23 +1343,9 @@
 
   async function bootstrap() {
     try {
-      const catalog = await apiRequest('/api/courses');
-      catalog.forEach((item) => {
-        if (state.courses.some((local) => local.code === item.code)) return;
-        state.courses.push({
-          code: item.code, title: item.title, shortTitle: item.short_title, semester: item.semester,
-          status: item.status, visibility: item.visibility, progress: 0, credits: 4, workload: '60 h',
-          classDay: 'A definir', room: 'A definir', professor: 'Profa. Dra. Lídia Rebello Dias',
-          updatedAt: item.updated_at, cover: item.cover || 'assets/course-pea5004.webp', accent: '#56d6ca',
-          driveUrl: item.drive_url, driveConnected: Boolean(item.drive_connected),
-          driveEmail: 'lidia.rebello.dias@usp.br', description: 'Uma nova rota de aprendizagem.',
-          ementa: 'Cadastre a ementa desta disciplina.', objectives: ['Cadastrar o primeiro objetivo.'],
-          folders: [{ name: '01. Sobre o curso', detail: 'Ementa e cronograma', count: 0 }],
-          modules: [], readings: [], presentationTips: ['Abra com o problema.'], students: [], submissions: []
-        });
-      });
-      window.CourseStore.save(state);
-      course = window.CourseStore.getCourse(state, (params.get('curso') || currentCode).toUpperCase());
+      await syncAdminCatalog();
+      const requestedCode = (params.get('curso') || currentCode).toUpperCase();
+      course = state.courses.find((item) => item.code === requestedCode) || state.courses[0];
       currentCode = course.code;
     } catch (error) {
       console.warn('Catálogo SQLite indisponível.', error);

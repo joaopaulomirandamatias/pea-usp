@@ -2,6 +2,9 @@
   'use strict';
 
   let state = window.CourseStore.load();
+  let publishedCourseCodes = new Set(
+    state.courses.filter((item) => item.status === 'Publicada').map((item) => item.code)
+  );
   const params = new URLSearchParams(window.location.search);
   const requestedCode = (params.get('curso') || 'PEA5004').toUpperCase();
   let course = window.CourseStore.getCourse(state, requestedCode);
@@ -187,32 +190,84 @@
   function renderAssignments() {
     const panel = $('#studentAssignmentPanel');
     const assignments = remoteCourse?.my_assignments || [];
-    if (!isAuthenticated()) {
+    const activities = remoteCourse?.my_activities || [];
+    const authenticated = Boolean(isAuthenticated() && remoteCourse?.access?.authenticated);
+    $('#studentWorkspaceGate').hidden = authenticated;
+    $('#studentWorkspaceDashboard').hidden = !authenticated;
+    if (!authenticated) {
       panel.innerHTML = '<p>Entre com seu token para consultar sua escolha e as entregas obrigatórias.</p>';
+      $('#studentActivityList').innerHTML = '';
       return;
     }
     if (!assignments.length) {
       panel.innerHTML = '<div class="assignment-empty"><strong>Nenhum artigo escolhido.</strong><span>Abra “Escolher meu artigo” quando a professora liberar as reservas.</span></div>';
-      return;
+    } else {
+      panel.innerHTML = assignments.map((assignment) => {
+        const uploaded = new Set((assignment.uploads || []).map((item) => item.deliverable_type));
+        return `<article class="assignment-card">
+          <span class="assignment-code">${esc(assignment.article_code || 'ART')}</span>
+          <div><small>Sua escolha · ${esc(assignment.session_title)}</small><strong>${esc(assignment.article_title)}</strong>
+            <p>Enviar até <b>${esc(formatDeadline(assignment.submission_deadline))}</b></p>
+            <div class="required-deliverables">${(assignment.required_deliverables || []).map((name) => `<span class="${uploaded.has(name) ? 'done' : ''}">${uploaded.has(name) ? '✓' : '○'} ${esc(name)}</span>`).join('')}</div>
+          </div>
+          <a class="secondary-button" href="#atividades">Abrir entregas</a>
+        </article>`;
+      }).join('');
     }
-    panel.innerHTML = assignments.map((assignment) => {
-      const uploaded = new Set((assignment.uploads || []).map((item) => item.deliverable_type));
-      return `<article class="assignment-card">
-        <span class="assignment-code">${esc(assignment.article_code || 'ART')}</span>
-        <div><small>Sua escolha · ${esc(assignment.session_title)}</small><strong>${esc(assignment.article_title)}</strong>
-          <p>Enviar até <b>${esc(formatDeadline(assignment.submission_deadline))}</b></p>
-          <div class="required-deliverables">${(assignment.required_deliverables || []).map((name) => `<span class="${uploaded.has(name) ? 'done' : ''}">${uploaded.has(name) ? '✓' : '○'} ${esc(name)}</span>`).join('')}</div>
-        </div>
-        <button class="secondary-button" data-assignment-upload="${assignment.session_id}" data-assignment-article="${assignment.article_id}">Enviar arquivos</button>
+
+    const tasks = activities.flatMap((activity) => activity.tasks || []);
+    const complete = tasks.filter((task) => task.complete).length;
+    const progress = tasks.length ? Math.round((complete / tasks.length) * 100) : 0;
+    setText('#activityProgress', `${complete}/${tasks.length}`);
+    setText('#activityProgressLabel', tasks.length === 1 ? 'entrega concluída' : 'entregas concluídas');
+    $('#activityProgressBar').style.width = `${progress}%`;
+    const futureDeadlines = activities
+      .filter((activity) => activity.due_at && (activity.tasks || []).some((task) => !task.complete))
+      .map((activity) => activity.due_at).sort();
+    setText('#activityNextDeadline', futureDeadlines.length ? `Próximo prazo · ${formatDeadline(futureDeadlines[0])}` : tasks.length ? 'Nenhuma pendência com prazo definido' : 'Nenhuma atividade liberada');
+
+    $('#studentActivityList').innerHTML = activities.map((activity, index) => {
+      const overdue = Boolean(activity.due_at && new Date(activity.due_at) <= new Date());
+      const taskRows = (activity.tasks || []).map((task) => {
+        const uploads = task.uploads || [];
+        const latest = uploads.at(-1);
+        const canUpload = Boolean(task.deliverable_type_id && !overdue);
+        return `<form class="activity-delivery ${task.complete ? 'complete' : ''}" data-direct-upload>
+          <input type="hidden" name="deliverable_type_id" value="${task.deliverable_type_id || ''}">
+          ${activity.session_id ? `<input type="hidden" name="session_id" value="${activity.session_id}">` : ''}
+          ${activity.article_id ? `<input type="hidden" name="article_id" value="${activity.article_id}">` : ''}
+          ${activity.assessment_id ? `<input type="hidden" name="assessment_id" value="${activity.assessment_id}">` : ''}
+          <div class="activity-delivery-state"><span>${task.complete ? '✓' : '○'}</span><div><strong>${esc(task.name)}</strong><small>${latest ? `${esc(latest.filename)} · enviado em ${esc(formatDeadline(latest.created_at))}` : canUpload ? 'Arquivo ainda não enviado' : overdue ? 'Prazo encerrado' : 'Tipo de entrega ainda não configurado'}</small></div></div>
+          <label class="activity-file-picker ${canUpload ? '' : 'disabled'}"><input name="file" type="file" required ${canUpload ? '' : 'disabled'} accept=".pdf,.ppt,.pptx,.doc,.docx,.odt,.odp,.xls,.xlsx,.csv,.zip"><span>${task.complete ? 'Escolher nova versão' : 'Escolher arquivo'}</span></label>
+          <button class="secondary-button" type="submit" ${canUpload ? '' : 'disabled'}>${task.complete ? 'Enviar nova versão' : 'Enviar entrega'}</button>
+          <p class="activity-upload-message" role="status"></p>
+        </form>`;
+      }).join('');
+      return `<article class="student-activity-card ${overdue ? 'overdue' : ''}" style="--activity-index:${index}">
+        <header><span>${String(index + 1).padStart(2, '0')}</span><div><small>${esc(activity.label)}</small><h3>${esc(activity.title)}</h3><p>${esc(activity.context || '')}</p></div><time>${esc(activity.due_at ? formatDeadline(activity.due_at) : 'Sem prazo definido')}</time></header>
+        <div class="activity-instructions">${esc(activity.instructions || 'Consulte as orientações da professora.')}</div>
+        <div class="activity-deliveries">${taskRows}</div>
       </article>`;
-    }).join('');
-    $$('[data-assignment-upload]').forEach((button) => button.addEventListener('click', () => {
-      runProtectedAction('upload');
-      setTimeout(() => {
-        $('#uploadSessionSelect').value = button.dataset.assignmentUpload;
-        $('#uploadSessionSelect').dispatchEvent(new Event('change'));
-        $('#uploadArticleSelect').value = button.dataset.assignmentArticle;
-      }, 0);
+    }).join('') || '<div class="student-activity-empty"><strong>Nenhuma atividade liberada.</strong><p>Quando você escolher um artigo ou a professora abrir uma entrega, ela aparecerá aqui.</p></div>';
+
+    $$('[data-direct-upload]').forEach((form) => form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const message = form.querySelector('.activity-upload-message');
+      const submit = form.querySelector('button[type="submit"]');
+      const file = form.elements.file.files?.[0];
+      if (!file) { message.textContent = 'Escolha um arquivo antes de enviar.'; return; }
+      message.textContent = 'Enviando…';
+      submit.disabled = true;
+      try {
+        const payload = new FormData(form);
+        payload.append('description', 'Envio direto pela central de atividades');
+        await apiRequest('/api/uploads', { method: 'POST', body: payload });
+        await loadRemoteCourse();
+        showToast('Entrega recebida. A professora já pode consultar o arquivo.');
+      } catch (error) {
+        message.textContent = error.message;
+        submit.disabled = false;
+      }
     }));
   }
 
@@ -308,13 +363,14 @@
       }
       setText('#heroDriveStatus', course.driveConnected ? 'Sincronizado' : 'Aguardando');
       $('#heroDriveDot').classList.toggle('pending', !course.driveConnected);
-      setText('#syncTime', course.driveConnected ? course.updatedAt : 'Vínculo pendente');
+      setText('#syncTime', remoteCourse.drive_last_synced_at ? formatDeadline(remoteCourse.drive_last_synced_at) : 'Sincronização pendente');
       renderNextClass();
       renderUploadOptions();
       renderPresentationOptions();
       renderAssignments();
       renderGrades();
       renderModules();
+      renderFolders();
       renderReadings();
       if (activeRoomSessionId || remoteCourse.next_class) await loadClassRoom();
       if (isAuthenticated()) await loadMeetingAccess();
@@ -329,6 +385,7 @@
   async function bootstrapRemoteCourse() {
     try {
       const catalog = await apiRequest('/api/courses');
+      publishedCourseCodes = new Set(catalog.map((item) => item.code));
       catalog.forEach((item) => {
         const existing = state.courses.find((local) => local.code === item.code);
         if (existing) {
@@ -353,7 +410,10 @@
         });
       });
       window.CourseStore.save(state);
-      course = window.CourseStore.getCourse(state, requestedCode);
+      const publicFallback = state.courses.find((item) => publishedCourseCodes.has(item.code))?.code || 'PEA5004';
+      course = window.CourseStore.getCourse(
+        state, publishedCourseCodes.has(requestedCode) ? requestedCode : publicFallback
+      );
       renderCourse();
     } catch (error) {
       console.warn('Catálogo SQLite indisponível; usando as disciplinas locais.', error);
@@ -362,7 +422,8 @@
   }
 
   function renderCourseSwitcher() {
-    $('#switcherGrid').innerHTML = state.courses.map((item) => `
+    const publicCourses = state.courses.filter((item) => publishedCourseCodes.has(item.code));
+    $('#switcherGrid').innerHTML = publicCourses.map((item) => `
       <button class="course-option ${item.code === course.code ? 'active' : ''}"
         style="background-image:url('${esc(item.cover)}');--course-accent:${esc(item.accent)}"
         data-course="${esc(item.code)}" aria-label="Abrir ${esc(item.code)}: ${esc(item.shortTitle)}">
@@ -414,7 +475,49 @@
   }
 
   function renderFolders() {
-    $('#folderList').innerHTML = course.folders.map((folder) => `
+    const materials = remoteCourse?.drive_materials || [];
+    const canSeeMaterials = Boolean(remoteCourse?.access?.authenticated || remoteCourse?.access?.public_resources);
+    if (materials.length) {
+      $('#folderList').innerHTML = materials.map((item) => {
+        const size = item.size_bytes < 1024 * 1024 ? `${Math.max(1, Math.round(item.size_bytes / 1024))} KB` : `${(item.size_bytes / 1024 / 1024).toFixed(1)} MB`;
+        return `<article class="synced-drive-file">
+          <span class="drive-file-icon" aria-hidden="true">${item.mime_type.includes('pdf') ? 'PDF' : item.mime_type.includes('presentation') ? 'PPT' : 'ARQ'}</span>
+          <div><strong>${esc(item.name)}</strong><small>${esc(item.relative_path || 'Pasta principal')} · ${esc(size)}</small></div>
+          <button type="button" data-drive-download="${item.id}">Baixar <span aria-hidden="true">↓</span></button>
+        </article>`;
+      }).join('');
+      $$('[data-drive-download]').forEach((button) => button.addEventListener('click', async () => {
+        const item = materials.find((entry) => entry.id === Number(button.dataset.driveDownload));
+        if (!item) return;
+        button.disabled = true;
+        try {
+          const headers = {};
+          const token = sessionStorage.getItem(tokenKey());
+          if (token) headers.Authorization = `Bearer ${token}`;
+          const response = await fetch(item.download_url, { headers });
+          if (!response.ok) {
+            let message = 'Não foi possível baixar este material.';
+            try { message = (await response.json()).error || message; } catch (error) { /* resposta binária */ }
+            throw new Error(message);
+          }
+          const href = URL.createObjectURL(await response.blob());
+          const anchor = document.createElement('a');
+          anchor.href = href;
+          anchor.download = item.name;
+          anchor.click();
+          setTimeout(() => URL.revokeObjectURL(href), 1000);
+        } catch (error) { showToast(error.message); }
+        finally { button.disabled = false; }
+      }));
+      return;
+    }
+    if (remoteCourse) {
+      $('#folderList').innerHTML = canSeeMaterials
+        ? '<div class="drive-material-empty"><span>↻</span><div><strong>O acervo ainda não foi sincronizado.</strong><p>A professora precisa validar a pasta no painel docente.</p></div></div>'
+        : '<div class="drive-material-empty"><span>◇</span><div><strong>Acervo protegido para a turma.</strong><p>Entre com seu token para consultar os arquivos sincronizados.</p></div></div>';
+      return;
+    }
+    $('#folderList').innerHTML = (course.folders || []).map((folder) => `
       <div class="folder-row">
         <span class="folder-icon" aria-hidden="true"></span>
         <div><strong>${esc(folder.name)}</strong><small>${esc(folder.detail)}</small></div>
@@ -557,10 +660,10 @@
       return;
     }
     if (action === 'drive') {
-      if (course.driveConnected && course.driveUrl) {
-        window.open(course.driveUrl, '_blank', 'noopener,noreferrer');
+      if (remoteCourse?.drive_materials?.length) {
+        document.querySelector('#materiais').scrollIntoView({ behavior: 'smooth' });
       } else {
-        showToast(`O Drive de ${course.code} ainda aguarda o vínculo da professora.`);
+        showToast(`O acervo de ${course.code} ainda aguarda uma sincronização válida da professora.`);
       }
       return;
     }
@@ -572,6 +675,7 @@
   function setupAccess() {
     $('#accessButton').addEventListener('click', openAccess);
     $('#roomLoginButton').addEventListener('click', openAccess);
+    $('#workspaceLoginButton').addEventListener('click', openAccess);
     $('#gradesLoginButton').addEventListener('click', openAccess);
     $('#openAccessFromHero').addEventListener('click', () => runProtectedAction('drive'));
     $$('.protected-action').forEach((button) => button.addEventListener('click', () => runProtectedAction(button.dataset.action)));

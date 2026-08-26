@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260826-activities">
 </head>
 <body class="student-page">
   <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
@@ -26,6 +26,7 @@
   <nav class="cinematic-chapters" id="cinematicChapters" aria-label="Capítulos da experiência">
     <a href="#top" data-cinematic-link="top"><i>00</i><span>Abertura</span></a>
     <a href="#proxima-aula" data-cinematic-link="proxima-aula"><i>01</i><span>Próxima aula</span></a>
+    <a href="#atividades" data-cinematic-link="atividades"><i>A1</i><span>Atividades</span></a>
     <a href="#manifesto" data-cinematic-link="manifesto"><i>02</i><span>Manifesto</span></a>
     <a href="#trilha" data-cinematic-link="trilha"><i>03</i><span>Trilha</span></a>
     <a href="#ementa" data-cinematic-link="ementa"><i>04</i><span>Ementa</span></a>
@@ -45,6 +46,7 @@
     </button>
     <nav class="header-nav" aria-label="Navegação principal">
       <a href="#proxima-aula">Próxima aula</a>
+      <a href="#atividades">Atividades</a>
       <a href="#trilha">Trilha</a>
       <a href="#materiais">Materiais</a>
       <a href="#apresentacao">Apresentação</a>
@@ -195,6 +197,29 @@
             </section>
           </div>
         </section>
+      </div>
+    </section>
+
+    <section class="student-workspace-section section-pad cine-scene" id="atividades" data-cinematic-scene="atividades" aria-labelledby="studentWorkspaceTitle">
+      <div class="shell">
+        <header class="student-workspace-heading reveal">
+          <div class="section-index light"><span>A1</span><i></i><small>Plano de bordo</small></div>
+          <div><p class="eyebrow">Seu trabalho nesta disciplina</p><h2 id="studentWorkspaceTitle">Escolha confirmada.<br>Entregas sob controle.</h2></div>
+          <p>O artigo reservado, os prazos e cada arquivo exigido aparecem juntos. Envie o material diretamente na atividade correspondente.</p>
+        </header>
+        <div class="student-workspace-gate reveal" id="studentWorkspaceGate">
+          <span aria-hidden="true">◇</span><div><strong>Seu plano de bordo é privado.</strong><p>Entre com o token individual para consultar artigos, atividades e entregas.</p></div><button class="secondary-button" id="workspaceLoginButton" type="button">Abrir minhas atividades</button>
+        </div>
+        <div class="student-workspace-dashboard reveal" id="studentWorkspaceDashboard" hidden>
+          <aside class="student-workspace-summary">
+            <span class="eyebrow">Situação agora</span>
+            <strong id="activityProgress">0/0</strong>
+            <p id="activityProgressLabel">entregas concluídas</p>
+            <div class="activity-progress-track"><span id="activityProgressBar"></span></div>
+            <small id="activityNextDeadline">Nenhum prazo pendente</small>
+          </aside>
+          <div class="student-activity-list" id="studentActivityList"></div>
+        </div>
       </div>
     </section>
 
@@ -394,6 +419,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="data.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260826-activities"></script>
 </body>
 </html>

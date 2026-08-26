@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260826-activities">
 </head>
 <body class="admin-page admin-locked" data-admin-active-view="visao">
   <a class="skip-link" href="#adminContent">Pular para o conteúdo</a>
@@ -148,6 +148,9 @@
                   <label class="admin-field">Nota máxima<input name="max_score" type="number" min="0.1" max="1000" step="0.1" value="10" required></label>
                   <label class="admin-field">Peso (%)<input name="weight" type="number" min="0" max="100" step="0.1" value="25" required></label>
                   <label class="admin-field">Prazo<input name="due_at" type="datetime-local"></label>
+                  <label class="choice-toggle assessment-upload-toggle"><input name="requires_upload" type="checkbox"><span><strong>Exigir envio de arquivo</strong><small>A atividade aparecerá na central do aluno com entrega direta.</small></span></label>
+                  <label class="admin-field assessment-deliverable-field">Tipo da entrega<select name="deliverable_type_id" id="assessmentDeliverableType"><option value="">Selecione um tipo</option></select></label>
+                  <label class="admin-field assessment-instructions">Orientações<textarea name="instructions" rows="2" placeholder="Ex.: envie a versão final em PDF."></textarea></label>
                   <button class="admin-button primary" type="submit">Criar avaliação</button>
                 </form>
               </div>
@@ -183,6 +186,7 @@
                   <div><strong id="driveStateTitle">Pasta sincronizada</strong><small id="driveStateDetail">lidia.rebello.dias@usp.br</small></div>
                 </div>
                 <label class="admin-field" style="margin-top:17px;color:rgba(255,255,255,.58)">Link da pasta principal<input id="driveUrlInput" type="url" placeholder="https://drive.google.com/drive/folders/..." style="background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.18)"></label>
+                <p class="drive-sync-message" id="driveSyncMessage">O link será validado pela API antes de aparecer para os alunos.</p>
                 <div class="drive-folders" id="driveFolderList"></div>
                 <button class="admin-button" id="syncDriveButton">Sincronizar agora</button>
               </div>
@@ -196,6 +200,11 @@
                   <div><strong id="publishState">Disciplina publicada</strong><small id="publishDetail" style="color:#769096">Somente alunos cadastrados</small></div>
                 </div>
                 <button class="admin-button" id="togglePublishButton" style="width:100%;margin-top:17px">Alternar publicação</button>
+                <div class="course-lifecycle-actions">
+                  <button class="admin-button" id="cloneCurrentCourseButton" type="button">Clonar para novo semestre</button>
+                  <button class="admin-button danger" id="archiveCourseButton" type="button">Arquivar disciplina finalizada</button>
+                </div>
+                <p class="course-lifecycle-note">Ao arquivar, a disciplina some do site e todos os acessos de alunos e especialistas são encerrados. Os dados continuam disponíveis somente aqui.</p>
               </div>
             </section>
 
@@ -377,6 +386,6 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="data.js"></script>
-  <script src="admin.js"></script>
+  <script src="admin.js?v=20260826-activities"></script>
 </body>
 </html>

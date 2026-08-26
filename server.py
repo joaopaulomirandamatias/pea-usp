@@ -14,6 +14,8 @@ import re
 import secrets
 import sqlite3
 import sys
+import threading
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
@@ -21,9 +23,16 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, unquote, urlparse
+from urllib.parse import quote, unquote, urlencode, urlparse
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
+
+try:
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+    from google.oauth2 import service_account
+except ImportError:  # O servidor continua funcional; somente a sincronização fica indisponível.
+    GoogleAuthRequest = None
+    service_account = None
 
 
 ROOT = Path(__file__).resolve().parent
@@ -35,8 +44,10 @@ DATA_DIR = Path(
 DB_PATH = DATA_DIR / "disciplinas.db"
 UPLOAD_DIR = DATA_DIR / "uploads"
 COVER_DIR = DATA_DIR / "course-covers"
+DRIVE_SYNC_DIR = DATA_DIR / "drive-sync"
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_COVER_BYTES = 8 * 1024 * 1024
+MAX_DRIVE_FILE_BYTES = 100 * 1024 * 1024
 APP_TIMEZONE = ZoneInfo("America/Belem")
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "professora")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
@@ -49,6 +60,10 @@ OPENAI_RUNTIME = {
     "source": "environment" if os.environ.get("OPENAI_API_KEY") else "",
 }
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini")
+GOOGLE_DRIVE_RUNTIME = {"token": "", "expires_at": 0.0}
+GOOGLE_DRIVE_LOCK = threading.Lock()
+DRIVE_SYNC_LOCK = threading.Lock()
+GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 
 def local_today_iso() -> str:
@@ -156,6 +171,9 @@ CREATE TABLE IF NOT EXISTS courses (
     cover TEXT NOT NULL DEFAULT '',
     drive_url TEXT NOT NULL DEFAULT '',
     drive_connected INTEGER NOT NULL DEFAULT 0,
+    drive_sync_status TEXT NOT NULL DEFAULT 'pending',
+    drive_sync_error TEXT NOT NULL DEFAULT '',
+    drive_last_synced_at TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'Rascunho',
     visibility TEXT NOT NULL DEFAULT 'Somente alunos cadastrados',
     cover_file TEXT NOT NULL DEFAULT '',
@@ -239,6 +257,7 @@ CREATE TABLE IF NOT EXISTS uploads (
     student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
     session_id INTEGER REFERENCES class_sessions(id) ON DELETE SET NULL,
     article_id INTEGER REFERENCES articles(id) ON DELETE SET NULL,
+    assessment_id INTEGER REFERENCES assessment_items(id) ON DELETE SET NULL,
     deliverable_type_id INTEGER REFERENCES deliverable_types(id) ON DELETE SET NULL,
     filename TEXT NOT NULL,
     stored_name TEXT NOT NULL UNIQUE,
@@ -247,6 +266,25 @@ CREATE TABLE IF NOT EXISTS uploads (
     size_bytes INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS drive_items (
+    id INTEGER PRIMARY KEY,
+    course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    drive_file_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    relative_path TEXT NOT NULL DEFAULT '',
+    mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+    web_view_url TEXT NOT NULL DEFAULT '',
+    stored_name TEXT NOT NULL DEFAULT '',
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    modified_time TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    synced_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(course_id, drive_file_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_drive_items_course
+ON drive_items(course_id, active, relative_path, name);
 
 CREATE TABLE IF NOT EXISTS presentation_reservations (
     id INTEGER PRIMARY KEY,
@@ -349,6 +387,9 @@ CREATE TABLE IF NOT EXISTS assessment_items (
     max_score REAL NOT NULL DEFAULT 10,
     weight REAL NOT NULL DEFAULT 0,
     due_at TEXT NOT NULL DEFAULT '',
+    instructions TEXT NOT NULL DEFAULT '',
+    requires_upload INTEGER NOT NULL DEFAULT 0,
+    deliverable_type_id INTEGER REFERENCES deliverable_types(id) ON DELETE SET NULL,
     active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -394,7 +435,7 @@ COURSE_SEEDS = [
         "1º semestre de 2027",
         "assets/course-pea5003.webp",
         "https://drive.google.com/drive/folders/1Z6EvnGAYkvGZZKKyOVzmxDa0AjveNKFz",
-        1,
+        0,
         "Rascunho",
     ),
     (
@@ -404,7 +445,7 @@ COURSE_SEEDS = [
         "1º semestre de 2026",
         "assets/course-pea5714.webp",
         "https://drive.google.com/drive/folders/11BmJQxhewM4_X3u4yks6lKbxnWUIb7BG",
-        1,
+        0,
         "Arquivada",
     ),
 ]
@@ -528,6 +569,7 @@ def initialize_database() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     COVER_DIR.mkdir(parents=True, exist_ok=True)
+    DRIVE_SYNC_DIR.mkdir(parents=True, exist_ok=True)
     with connect() as database:
         database.executescript(SCHEMA)
         add_missing_columns(database, "courses", {
@@ -541,6 +583,9 @@ def initialize_database() -> None:
             "catalog_url": "TEXT NOT NULL DEFAULT ''",
             "catalog_professor": "TEXT NOT NULL DEFAULT ''",
             "cover_file": "TEXT NOT NULL DEFAULT ''",
+            "drive_sync_status": "TEXT NOT NULL DEFAULT 'pending'",
+            "drive_sync_error": "TEXT NOT NULL DEFAULT ''",
+            "drive_last_synced_at": "TEXT NOT NULL DEFAULT ''",
             "public_overview": "INTEGER NOT NULL DEFAULT 1",
             "public_schedule": "INTEGER NOT NULL DEFAULT 1",
             "public_articles": "INTEGER NOT NULL DEFAULT 0",
@@ -559,10 +604,35 @@ def initialize_database() -> None:
             "student_choice_enabled": "INTEGER NOT NULL DEFAULT 0",
             "submission_deadline": "TEXT NOT NULL DEFAULT ''",
         })
-        add_missing_columns(database, "uploads", {"deliverable_type_id": "INTEGER"})
+        add_missing_columns(database, "uploads", {
+            "deliverable_type_id": "INTEGER",
+            "assessment_id": "INTEGER REFERENCES assessment_items(id) ON DELETE SET NULL",
+        })
+        add_missing_columns(database, "assessment_items", {
+            "instructions": "TEXT NOT NULL DEFAULT ''",
+            "requires_upload": "INTEGER NOT NULL DEFAULT 0",
+            "deliverable_type_id": "INTEGER REFERENCES deliverable_types(id) ON DELETE SET NULL",
+        })
         add_missing_columns(database, "admin_auth_sessions", {
             "teacher_id": "INTEGER REFERENCES teachers(id) ON DELETE CASCADE",
         })
+        database.execute("CREATE TABLE IF NOT EXISTS app_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        drive_migration_key = "real_drive_sync_2026_08_26"
+        if not database.execute(
+            "SELECT 1 FROM app_metadata WHERE key = ?", (drive_migration_key,)
+        ).fetchone():
+            database.execute(
+                """
+                UPDATE courses SET drive_connected = 0,
+                    drive_sync_status = CASE WHEN drive_url = '' THEN 'pending' ELSE 'credentials_required' END,
+                    drive_sync_error = CASE WHEN drive_url = '' THEN '' ELSE 'A pasta ainda não foi sincronizada pela API do Google Drive.' END
+                WHERE drive_last_synced_at = ''
+                """
+            )
+            database.execute(
+                "INSERT INTO app_metadata (key, value) VALUES (?, ?)",
+                (drive_migration_key, utc_now_iso()),
+            )
         if not database.execute(
             "SELECT 1 FROM teachers WHERE LOWER(username) = 'maria.lidia'"
         ).fetchone():
@@ -593,6 +663,13 @@ def initialize_database() -> None:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             COURSE_SEEDS,
+        )
+        database.execute(
+            """
+            UPDATE courses SET drive_sync_status = 'credentials_required',
+                drive_sync_error = 'A pasta ainda não foi sincronizada pela API do Google Drive.'
+            WHERE drive_url <> ''
+            """
         )
         course_rows = database.execute("SELECT id, code FROM courses").fetchall()
         database.executemany(
@@ -848,6 +925,8 @@ def course_payload(
             "public_chat": bool(course["public_chat"]),
         }
         payload.pop("cover_file", None)
+        if not admin:
+            payload.pop("drive_sync_error", None)
         if not (admin or authenticated):
             payload["drive_url"] = ""
             payload["drive_connected"] = 0
@@ -896,6 +975,9 @@ def course_payload(
             "uploads": database.execute(
                 "SELECT COUNT(*) FROM uploads WHERE course_id = ?", (course["id"],)
             ).fetchone()[0],
+            "drive_items": database.execute(
+                "SELECT COUNT(*) FROM drive_items WHERE course_id = ? AND active = 1", (course["id"],)
+            ).fetchone()[0],
         }
         payload["deliverable_types"] = [
             dict(row)
@@ -904,6 +986,23 @@ def course_payload(
                 (course["id"],),
             ).fetchall()
         ]
+        can_see_drive_materials = admin or authenticated or (
+            course["status"] == "Publicada" and bool(course["public_resources"])
+        )
+        payload["drive_materials"] = [
+            {
+                **dict(row),
+                "download_url": f"/api/courses/{quote(course['code'])}/drive-materials/{row['id']}/download",
+            }
+            for row in database.execute(
+                """
+                SELECT id, name, relative_path, mime_type, size_bytes, modified_time, synced_at
+                FROM drive_items WHERE course_id = ? AND active = 1
+                ORDER BY relative_path, name
+                """,
+                (course["id"],),
+            ).fetchall()
+        ] if can_see_drive_materials else []
         if authenticated:
             payload["my_assignments"] = [
                 dict(row)
@@ -935,12 +1034,81 @@ def course_payload(
                         (student["id"], assignment["article_id"]),
                     ).fetchall()
                 ]
+            deliverable_by_name = {
+                str(item["name"]).casefold(): item for item in payload["deliverable_types"]
+            }
+            payload["my_activities"] = []
+            for assignment in payload["my_assignments"]:
+                tasks = []
+                for name in assignment["required_deliverables"]:
+                    deliverable = deliverable_by_name.get(name.casefold())
+                    task_uploads = [
+                        upload for upload in assignment["uploads"]
+                        if str(upload.get("deliverable_type", "")).casefold() == name.casefold()
+                    ]
+                    tasks.append({
+                        "name": name,
+                        "deliverable_type_id": deliverable["id"] if deliverable else None,
+                        "uploads": task_uploads,
+                        "complete": bool(task_uploads),
+                    })
+                payload["my_activities"].append({
+                    "key": f"article-{assignment['article_id']}",
+                    "kind": "article",
+                    "title": assignment["article_title"],
+                    "label": f"{assignment['article_code'] or 'ART'} · Artigo escolhido",
+                    "context": assignment["session_title"],
+                    "session_date": assignment["session_date"],
+                    "due_at": assignment["submission_deadline"],
+                    "session_id": assignment["session_id"],
+                    "article_id": assignment["article_id"],
+                    "instructions": "Entregue a resenha e os slides finais da apresentação.",
+                    "tasks": tasks,
+                })
+            assessment_activities = database.execute(
+                """
+                SELECT ai.*, dt.name AS deliverable_type_name
+                FROM assessment_items ai
+                LEFT JOIN deliverable_types dt ON dt.id = ai.deliverable_type_id
+                WHERE ai.course_id = ? AND ai.active = 1 AND ai.requires_upload = 1
+                ORDER BY ai.due_at = '', ai.due_at, ai.id
+                """,
+                (course["id"],),
+            ).fetchall()
+            for assessment in assessment_activities:
+                activity_uploads = [
+                    dict(row) for row in database.execute(
+                        """
+                        SELECT u.id, u.filename, u.created_at, dt.name AS deliverable_type
+                        FROM uploads u LEFT JOIN deliverable_types dt ON dt.id = u.deliverable_type_id
+                        WHERE u.student_id = ? AND u.assessment_id = ? ORDER BY u.created_at
+                        """,
+                        (student["id"], assessment["id"]),
+                    ).fetchall()
+                ]
+                payload["my_activities"].append({
+                    "key": f"assessment-{assessment['id']}",
+                    "kind": "assessment",
+                    "title": assessment["name"],
+                    "label": "Atividade da disciplina",
+                    "context": assessment["kind"],
+                    "due_at": assessment["due_at"],
+                    "assessment_id": assessment["id"],
+                    "instructions": assessment["instructions"] or "Envie o material solicitado pela professora.",
+                    "tasks": [{
+                        "name": assessment["deliverable_type_name"] or "Entrega",
+                        "deliverable_type_id": assessment["deliverable_type_id"],
+                        "uploads": activity_uploads,
+                        "complete": bool(activity_uploads),
+                    }],
+                })
             payload["grades"] = [
                 dict(row)
                 for row in database.execute(
                     """
                     SELECT ai.id AS assessment_id, ai.name, ai.kind, ai.max_score, ai.weight,
-                           ai.due_at, sg.score, sg.feedback, sg.updated_at
+                           ai.due_at, ai.instructions, ai.requires_upload, ai.deliverable_type_id,
+                           sg.score, sg.feedback, sg.updated_at
                     FROM assessment_items ai
                     LEFT JOIN student_grades sg
                       ON sg.assessment_id = ai.id AND sg.student_id = ?
@@ -957,6 +1125,8 @@ def course_payload(
             if not course["grade_results_published"]:
                 payload["grade_summary"]["concept"] = None
         if admin:
+            payload["drive_sync_configured"] = google_drive_configured()
+            payload["drive_service_account_email"] = google_drive_service_account_email()
             payload["students"] = [
                 public_student(row)
                 for row in database.execute(
@@ -968,11 +1138,13 @@ def course_payload(
                 for row in database.execute(
                     """
                     SELECT u.*, s.name AS student_name, cs.title AS session_title,
-                           a.title AS article_title, dt.name AS deliverable_type_name
+                           a.title AS article_title, ai.name AS assessment_title,
+                           dt.name AS deliverable_type_name
                     FROM uploads u
                     JOIN students s ON s.id = u.student_id
                     LEFT JOIN class_sessions cs ON cs.id = u.session_id
                     LEFT JOIN articles a ON a.id = u.article_id
+                    LEFT JOIN assessment_items ai ON ai.id = u.assessment_id
                     LEFT JOIN deliverable_types dt ON dt.id = u.deliverable_type_id
                     WHERE u.course_id = ?
                     ORDER BY u.created_at DESC, u.id DESC
@@ -1099,6 +1271,260 @@ def clean_filename(filename: str) -> str:
     return name[:120] or "material"
 
 
+def drive_folder_id(value: str) -> str:
+    match = re.search(r"/folders/([A-Za-z0-9_-]+)", value or "")
+    if not match:
+        parsed = urlparse(value or "")
+        match = re.search(r"(?:^|&)id=([A-Za-z0-9_-]+)", parsed.query)
+    if not match:
+        raise ValueError("Use o endereço completo de uma pasta do Google Drive.")
+    return match.group(1)
+
+
+def google_drive_configured() -> bool:
+    return bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_DRIVE_API_KEY"))
+
+
+def google_drive_service_account_email() -> str:
+    raw_credentials = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    if not raw_credentials:
+        return ""
+    try:
+        credentials_info = json.loads(raw_credentials) if raw_credentials.startswith("{") else json.loads(
+            base64.b64decode(raw_credentials).decode("utf-8")
+        )
+    except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        return ""
+    return str(credentials_info.get("client_email", "")).strip()
+
+
+def google_drive_auth() -> tuple[dict[str, str], dict[str, str]]:
+    raw_credentials = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    if raw_credentials:
+        if service_account is None or GoogleAuthRequest is None:
+            raise RuntimeError("O suporte à conta de serviço do Google não foi instalado no servidor.")
+        with GOOGLE_DRIVE_LOCK:
+            if GOOGLE_DRIVE_RUNTIME["token"] and GOOGLE_DRIVE_RUNTIME["expires_at"] > time.time() + 90:
+                return {"Authorization": f"Bearer {GOOGLE_DRIVE_RUNTIME['token']}"}, {}
+            try:
+                credentials_info = json.loads(raw_credentials) if raw_credentials.startswith("{") else json.loads(
+                    base64.b64decode(raw_credentials).decode("utf-8")
+                )
+                credentials = service_account.Credentials.from_service_account_info(
+                    credentials_info, scopes=GOOGLE_DRIVE_SCOPES
+                )
+                credentials.refresh(GoogleAuthRequest())
+            except Exception as error:
+                raise RuntimeError("A credencial GOOGLE_SERVICE_ACCOUNT_JSON não pôde ser validada.") from error
+            GOOGLE_DRIVE_RUNTIME["token"] = credentials.token or ""
+            GOOGLE_DRIVE_RUNTIME["expires_at"] = credentials.expiry.timestamp() if credentials.expiry else time.time() + 3000
+            return {"Authorization": f"Bearer {credentials.token}"}, {}
+    api_key = os.environ.get("GOOGLE_DRIVE_API_KEY", "").strip()
+    if api_key:
+        return {}, {"key": api_key}
+    raise RuntimeError(
+        "Configure GOOGLE_SERVICE_ACCOUNT_JSON e compartilhe a pasta com o e-mail da conta de serviço."
+    )
+
+
+def google_drive_request(path: str, params: dict[str, str] | None = None, *, binary: bool = False):
+    headers, auth_params = google_drive_auth()
+    query = {**auth_params, **(params or {})}
+    url = f"https://www.googleapis.com/drive/v3/{path}"
+    if query:
+        url += f"?{urlencode(query)}"
+    request = Request(url, headers={"Accept": "application/json", **headers})
+    try:
+        response = urlopen(request, timeout=90)
+        if binary:
+            return response
+        with response:
+            return json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        detail = ""
+        try:
+            detail = json.loads(error.read().decode("utf-8")).get("error", {}).get("message", "")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+        if error.code in {401, 403, 404}:
+            raise RuntimeError(
+                "O Google Drive recusou o acesso. Compartilhe a pasta com a conta de serviço configurada."
+            ) from error
+        raise RuntimeError(f"Falha na API do Google Drive: {detail or error.reason}") from error
+    except (URLError, TimeoutError) as error:
+        raise RuntimeError("O Google Drive não respondeu à sincronização.") from error
+
+
+def google_drive_tree(folder_id: str) -> list[dict]:
+    folder_mime = "application/vnd.google-apps.folder"
+    queue = [(folder_id, "")]
+    files: list[dict] = []
+    while queue:
+        parent_id, relative_path = queue.pop(0)
+        page_token = ""
+        while True:
+            result = google_drive_request(
+                "files",
+                {
+                    "q": f"'{parent_id}' in parents and trashed = false",
+                    "fields": "nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink)",
+                    "pageSize": "1000",
+                    "supportsAllDrives": "true",
+                    "includeItemsFromAllDrives": "true",
+                    **({"pageToken": page_token} if page_token else {}),
+                },
+            )
+            for item in result.get("files", []):
+                if item.get("mimeType") == folder_mime:
+                    folder_name = clean_filename(item.get("name", "pasta"))
+                    queue.append((item["id"], "/".join(filter(None, [relative_path, folder_name]))))
+                elif item.get("mimeType") != "application/vnd.google-apps.shortcut":
+                    item["relative_path"] = relative_path
+                    files.append(item)
+                    if len(files) > 2000:
+                        raise RuntimeError("A pasta possui mais de 2.000 arquivos; divida o acervo antes de sincronizar.")
+            page_token = result.get("nextPageToken", "")
+            if not page_token:
+                break
+    return files
+
+
+GOOGLE_EXPORTS = {
+    "application/vnd.google-apps.document": ("application/pdf", ".pdf"),
+    "application/vnd.google-apps.spreadsheet": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xlsx"
+    ),
+    "application/vnd.google-apps.presentation": (
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation", ".pptx"
+    ),
+    "application/vnd.google-apps.drawing": ("image/png", ".png"),
+}
+
+
+def download_drive_item(item: dict, destination_dir: Path) -> dict:
+    export = GOOGLE_EXPORTS.get(item.get("mimeType", ""))
+    suffix = export[1] if export else Path(item.get("name", "")).suffix[:12]
+    stored_name = f"{item['id']}{suffix}"
+    destination = destination_dir / stored_name
+    if export:
+        response = google_drive_request(f"files/{quote(item['id'])}/export", {"mimeType": export[0]}, binary=True)
+        mime_type = export[0]
+    else:
+        response = google_drive_request(
+            f"files/{quote(item['id'])}", {"alt": "media", "supportsAllDrives": "true"}, binary=True
+        )
+        mime_type = item.get("mimeType") or "application/octet-stream"
+    temporary = destination.with_suffix(destination.suffix + ".part")
+    size = 0
+    try:
+        with response, temporary.open("wb") as output:
+            while chunk := response.read(64 * 1024):
+                size += len(chunk)
+                if size > MAX_DRIVE_FILE_BYTES:
+                    raise RuntimeError(f"O arquivo “{item.get('name', 'sem nome')}” ultrapassa 100 MB.")
+                output.write(chunk)
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return {**item, "stored_name": stored_name, "size_bytes": size, "download_mime_type": mime_type}
+
+
+def sync_drive_course(code: str) -> dict:
+    with DRIVE_SYNC_LOCK:
+        with connect() as database:
+            course = database.execute(
+                "SELECT id, code, drive_url FROM courses WHERE UPPER(code) = UPPER(?)", (code,)
+            ).fetchone()
+            if not course:
+                raise ValueError("Disciplina não encontrada.")
+            if not course["drive_url"]:
+                raise ValueError("Cadastre o link da pasta do Google Drive antes de sincronizar.")
+            database.execute(
+                "UPDATE courses SET drive_sync_status = 'syncing', drive_sync_error = '' WHERE id = ?",
+                (course["id"],),
+            )
+        try:
+            items = google_drive_tree(drive_folder_id(course["drive_url"]))
+            target_dir = DRIVE_SYNC_DIR / clean_filename(course["code"].upper())
+            target_dir.mkdir(parents=True, exist_ok=True)
+            synchronized = [download_drive_item(item, target_dir) for item in items]
+            current_names = {item["stored_name"] for item in synchronized}
+            with connect() as database:
+                previous_names = {
+                    row["stored_name"] for row in database.execute(
+                        "SELECT stored_name FROM drive_items WHERE course_id = ? AND stored_name <> ''",
+                        (course["id"],),
+                    ).fetchall()
+                }
+                database.execute("UPDATE drive_items SET active = 0 WHERE course_id = ?", (course["id"],))
+                for item in synchronized:
+                    display_name = item.get("name", "material")
+                    export = GOOGLE_EXPORTS.get(item.get("mimeType", ""))
+                    if export and not display_name.lower().endswith(export[1]):
+                        display_name += export[1]
+                    database.execute(
+                        """
+                        INSERT INTO drive_items
+                            (course_id, drive_file_id, name, relative_path, mime_type, web_view_url,
+                             stored_name, size_bytes, modified_time, active, synced_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                        ON CONFLICT(course_id, drive_file_id) DO UPDATE SET
+                            name = excluded.name, relative_path = excluded.relative_path,
+                            mime_type = excluded.mime_type, web_view_url = excluded.web_view_url,
+                            stored_name = excluded.stored_name, size_bytes = excluded.size_bytes,
+                            modified_time = excluded.modified_time, active = 1, synced_at = CURRENT_TIMESTAMP
+                        """,
+                        (
+                            course["id"], item["id"], display_name, item.get("relative_path", ""),
+                            item.get("download_mime_type", item.get("mimeType", "")),
+                            item.get("webViewLink", ""), item["stored_name"], item["size_bytes"],
+                            item.get("modifiedTime", ""),
+                        ),
+                    )
+                database.execute(
+                    """
+                    UPDATE courses SET drive_connected = 1, drive_sync_status = 'synced',
+                        drive_sync_error = '', drive_last_synced_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP WHERE id = ?
+                    """,
+                    (course["id"],),
+                )
+            for obsolete in previous_names - current_names:
+                (target_dir / obsolete).unlink(missing_ok=True)
+            return {"count": len(synchronized), "status": "synced"}
+        except Exception as error:
+            with connect() as database:
+                database.execute(
+                    "UPDATE courses SET drive_connected = 0, drive_sync_status = 'error', drive_sync_error = ? WHERE id = ?",
+                    (str(error)[:500], course["id"]),
+                )
+            raise
+
+
+def start_drive_sync_worker() -> None:
+    if not google_drive_configured():
+        return
+    interval_hours = max(1, int(os.environ.get("GOOGLE_DRIVE_SYNC_HOURS", "6") or 6))
+
+    def worker() -> None:
+        time.sleep(60)
+        while True:
+            with connect() as database:
+                course_codes = [
+                    row["code"] for row in database.execute(
+                        "SELECT code FROM courses WHERE drive_url <> '' AND status = 'Publicada' ORDER BY id"
+                    ).fetchall()
+                ]
+            for course_code in course_codes:
+                try:
+                    sync_drive_course(course_code)
+                except Exception as error:
+                    print(f"Drive {course_code}: {error}")
+            time.sleep(interval_hours * 3600)
+
+    threading.Thread(target=worker, name="google-drive-sync", daemon=True).start()
+
+
 class RotaHandler(SimpleHTTPRequestHandler):
     server_version = "RotaDisciplina/1.0"
 
@@ -1199,6 +1625,7 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 JOIN students s ON s.id = aus.student_id
                 JOIN courses c ON c.id = s.course_id
                 WHERE aus.token = ? AND aus.expires_at > ? AND s.active = 1
+                  AND c.status = 'Publicada'
                 """,
                 (token, utc_now_iso()),
             ).fetchone()
@@ -1217,6 +1644,7 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 JOIN class_sessions cs ON cs.id = ss.session_id
                 JOIN courses c ON c.id = cs.course_id
                 WHERE sas.token = ? AND sas.expires_at > ? AND ss.active = 1
+                  AND c.status = 'Publicada'
                 """,
                 (token, utc_now_iso()),
             ).fetchone()
@@ -1259,7 +1687,23 @@ class RotaHandler(SimpleHTTPRequestHandler):
                         """
                         SELECT code, title, short_title, semester, cover, status, visibility,
                                public_overview, public_schedule
-                        FROM courses ORDER BY code
+                        FROM courses WHERE status = 'Publicada' ORDER BY code
+                        """
+                    ).fetchall()
+                ]
+            self.json_response(courses)
+            return
+        if path == "/api/admin/courses":
+            with connect() as database:
+                courses = [
+                    dict(row) for row in database.execute(
+                        """
+                        SELECT code, title, short_title, semester, cover, status, visibility,
+                               drive_url, drive_connected, drive_sync_status, drive_last_synced_at,
+                               public_overview, public_schedule, updated_at
+                        FROM courses ORDER BY
+                            CASE status WHEN 'Publicada' THEN 0 WHEN 'Rascunho' THEN 1 ELSE 2 END,
+                            code
                         """
                     ).fetchall()
                 ]
@@ -1297,10 +1741,10 @@ class RotaHandler(SimpleHTTPRequestHandler):
             with connect() as database:
                 meeting = database.execute(
                     """
-                    SELECT id, session_date, start_time, title, meet_url
-                    FROM class_sessions
-                    WHERE course_id = ? AND session_date >= ?
-                    ORDER BY session_date, start_time, id
+                    SELECT cs.id, cs.session_date, cs.start_time, cs.title, cs.meet_url
+                    FROM class_sessions cs JOIN courses c ON c.id = cs.course_id
+                    WHERE cs.course_id = ? AND c.status = 'Publicada' AND cs.session_date >= ?
+                    ORDER BY cs.session_date, cs.start_time, cs.id
                     LIMIT 1
                     """,
                     (student["course_id"], local_today_iso()),
@@ -1310,8 +1754,61 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 return
             self.json_response({"meeting": dict(meeting)})
             return
+        match = re.fullmatch(r"/api/courses/([A-Za-z0-9_-]+)/drive-materials/(\d+)/download", path)
+        if match:
+            code, item_id = match.group(1), int(match.group(2))
+            admin = self.bearer_admin()
+            student = self.bearer_student()
+            with connect() as database:
+                item = database.execute(
+                    """
+                    SELECT di.*, c.code AS course_code, c.status AS course_status,
+                           c.public_resources, c.id AS target_course_id
+                    FROM drive_items di JOIN courses c ON c.id = di.course_id
+                    WHERE di.id = ? AND di.active = 1 AND UPPER(c.code) = UPPER(?)
+                    """,
+                    (item_id, code),
+                ).fetchone()
+            allowed = bool(item and (
+                admin
+                or (
+                    item["course_status"] == "Publicada"
+                    and (
+                        (student and student["course_id"] == item["target_course_id"])
+                        or item["public_resources"]
+                    )
+                )
+            ))
+            if not allowed:
+                self.error_response("Material não encontrado ou acesso não autorizado.", 404)
+                return
+            target = (DRIVE_SYNC_DIR / clean_filename(item["course_code"].upper()) / item["stored_name"]).resolve()
+            course_dir = (DRIVE_SYNC_DIR / clean_filename(item["course_code"].upper())).resolve()
+            if target.parent != course_dir or not target.is_file():
+                self.error_response("Arquivo sincronizado não encontrado.", 404)
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", item["mime_type"] or "application/octet-stream")
+            self.send_header("Content-Length", str(target.stat().st_size))
+            self.send_header(
+                "Content-Disposition", f"attachment; filename=material; filename*=UTF-8''{quote(item['name'])}"
+            )
+            self.send_header("Cache-Control", "private, no-store")
+            self.end_headers()
+            with target.open("rb") as source:
+                while chunk := source.read(64 * 1024):
+                    self.wfile.write(chunk)
+            return
         match = re.fullmatch(r"/api/courses/([A-Za-z0-9_-]+)", path)
         if match:
+            with connect() as database:
+                published = database.execute(
+                    "SELECT 1 FROM courses WHERE UPPER(code) = UPPER(?) AND status = 'Publicada'",
+                    (match.group(1),),
+                ).fetchone()
+            if not published:
+                self.error_response("Disciplina não publicada.", 404)
+                return
             student = self.bearer_student()
             payload = course_payload(match.group(1), student=student)
             if payload is None:
@@ -1322,13 +1819,14 @@ class RotaHandler(SimpleHTTPRequestHandler):
         match = re.fullmatch(r"/api/courses/([A-Za-z0-9_-]+)/sessions/(\d+)/room", path)
         if match:
             session_id = int(match.group(2))
+            admin = self.bearer_admin()
             with connect() as database:
                 valid = database.execute(
                     """
                     SELECT 1 FROM class_sessions cs JOIN courses c ON c.id = cs.course_id
-                    WHERE cs.id = ? AND UPPER(c.code) = UPPER(?)
+                    WHERE cs.id = ? AND UPPER(c.code) = UPPER(?) AND (? = 1 OR c.status = 'Publicada')
                     """,
-                    (session_id, match.group(1)),
+                    (session_id, match.group(1), 1 if admin else 0),
                 ).fetchone()
             if not valid:
                 self.error_response("Sala de aula não encontrada.", 404)
@@ -1443,6 +1941,18 @@ class RotaHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/admin/ai/fill":
             self.ai_fill_fields()
+            return
+        match = re.fullmatch(r"/api/admin/courses/([A-Za-z0-9_-]+)/drive/sync", path)
+        if match:
+            try:
+                result = sync_drive_course(match.group(1))
+            except ValueError as error:
+                self.error_response(str(error), 404)
+                return
+            except RuntimeError as error:
+                self.error_response(str(error), 502)
+                return
+            self.json_response({**result, "course": course_payload(match.group(1), admin=True)})
             return
         if path == "/api/presentations":
             self.create_presentation_reservation()
@@ -1651,7 +2161,8 @@ class RotaHandler(SimpleHTTPRequestHandler):
                     """
                     SELECT s.*, c.code AS course_code
                     FROM students s JOIN courses c ON c.id = s.course_id
-                    WHERE UPPER(c.code) = UPPER(?) AND s.access_token_hash = ? AND s.active = 1
+                    WHERE UPPER(c.code) = UPPER(?) AND c.status = 'Publicada'
+                      AND s.access_token_hash = ? AND s.active = 1
                     """,
                     (code, secret_hash(identifier)),
                 ).fetchone()
@@ -1660,7 +2171,7 @@ class RotaHandler(SimpleHTTPRequestHandler):
                     """
                     SELECT s.*, c.code AS course_code
                     FROM students s JOIN courses c ON c.id = s.course_id
-                    WHERE UPPER(c.code) = UPPER(?)
+                    WHERE UPPER(c.code) = UPPER(?) AND c.status = 'Publicada'
                       AND (LOWER(s.email) = LOWER(?) OR s.nusp = ?)
                       AND s.active = 1
                     """,
@@ -1686,7 +2197,7 @@ class RotaHandler(SimpleHTTPRequestHandler):
             student = database.execute(
                 """
                 SELECT s.id FROM students s JOIN courses c ON c.id = s.course_id
-                WHERE UPPER(c.code) = UPPER(?)
+                WHERE UPPER(c.code) = UPPER(?) AND c.status = 'Publicada'
                   AND (LOWER(s.email) = LOWER(?) OR s.nusp = ?) AND s.active = 1
                 """,
                 (code, identifier, identifier),
@@ -2109,10 +2620,23 @@ class RotaHandler(SimpleHTTPRequestHandler):
         due_at = str(data.get("due_at", current["due_at"] if current else "")).strip()
         if due_at and not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", due_at):
             return None
+        instructions = str(data.get("instructions", current["instructions"] if current else "")).strip()[:2000]
+        requires_upload = 1 if data.get(
+            "requires_upload", bool(current["requires_upload"]) if current else False
+        ) else 0
+        raw_deliverable = data.get(
+            "deliverable_type_id", current["deliverable_type_id"] if current else None
+        )
+        try:
+            deliverable_type_id = int(raw_deliverable) if raw_deliverable not in {None, ""} else None
+        except (TypeError, ValueError):
+            return None
+        if requires_upload and not deliverable_type_id:
+            return None
         active = 1 if data.get("active", bool(current["active"]) if current else True) else 0
         if not name or not (0 < max_score <= 1000) or not (0 <= weight <= 100):
             return None
-        return name, kind, max_score, weight, due_at, active
+        return name, kind, max_score, weight, due_at, instructions, requires_upload, deliverable_type_id, active
 
     def create_assessment(self, code: str) -> None:
         data = self.read_json()
@@ -2125,11 +2649,18 @@ class RotaHandler(SimpleHTTPRequestHandler):
             if not course_id:
                 self.error_response("Disciplina não encontrada.", 404)
                 return
+            if values[6] and not database.execute(
+                "SELECT 1 FROM deliverable_types WHERE id = ? AND course_id = ? AND active = 1",
+                (values[7], course_id),
+            ).fetchone():
+                self.error_response("Escolha um tipo de entrega ativo desta disciplina.")
+                return
             cursor = database.execute(
                 """
                 INSERT INTO assessment_items
-                    (course_id, name, kind, max_score, weight, due_at, active)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (course_id, name, kind, max_score, weight, due_at, instructions,
+                     requires_upload, deliverable_type_id, active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (course_id, *values),
             )
@@ -2154,10 +2685,17 @@ class RotaHandler(SimpleHTTPRequestHandler):
             if values is None:
                 self.error_response("Revise o nome, a nota máxima, o peso e o prazo da avaliação.")
                 return
+            if values[6] and not database.execute(
+                "SELECT 1 FROM deliverable_types WHERE id = ? AND course_id = ? AND active = 1",
+                (values[7], assessment["course_id"]),
+            ).fetchone():
+                self.error_response("Escolha um tipo de entrega ativo desta disciplina.")
+                return
             database.execute(
                 """
                 UPDATE assessment_items
-                SET name = ?, kind = ?, max_score = ?, weight = ?, due_at = ?, active = ?,
+                SET name = ?, kind = ?, max_score = ?, weight = ?, due_at = ?, instructions = ?,
+                    requires_upload = ?, deliverable_type_id = ?, active = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
@@ -2276,7 +2814,7 @@ class RotaHandler(SimpleHTTPRequestHandler):
                         str(data.get("room", template_course["room"] if template_course else "")),
                         str(data.get("professor_name", template_course["professor_name"] if template_course else "Profa. Maria Lídia")),
                         str(data.get("cover", "assets/course-pea5004.webp")),
-                        str(data.get("drive_url", "")).strip(), 1 if data.get("drive_url") else 0,
+                        str(data.get("drive_url", "")).strip(), 0,
                         template_course["public_overview"] if template_course else 1,
                         template_course["public_schedule"] if template_course else 1,
                         template_course["public_articles"] if template_course else 0,
@@ -2300,19 +2838,35 @@ class RotaHandler(SimpleHTTPRequestHandler):
                     [(course_cursor.lastrowid, name) for name in deliverable_names],
                 )
                 if template_course:
+                    cloned_deliverables = {
+                        row["name"].casefold(): row["id"]
+                        for row in database.execute(
+                            "SELECT id, name FROM deliverable_types WHERE course_id = ?",
+                            (course_cursor.lastrowid,),
+                        ).fetchall()
+                    }
                     database.executemany(
                         """
                         INSERT INTO assessment_items
-                            (course_id, name, kind, max_score, weight, due_at, active)
-                        VALUES (?, ?, ?, ?, ?, '', ?)
+                            (course_id, name, kind, max_score, weight, due_at, instructions,
+                             requires_upload, deliverable_type_id, active)
+                        VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?)
                         """,
                         [
                             (
                                 course_cursor.lastrowid, item["name"], item["kind"],
-                                item["max_score"], item["weight"], item["active"],
+                                item["max_score"], item["weight"], item["instructions"],
+                                item["requires_upload"],
+                                cloned_deliverables.get(str(item["deliverable_name"] or "").casefold()),
+                                item["active"],
                             )
                             for item in database.execute(
-                                "SELECT * FROM assessment_items WHERE course_id = ? ORDER BY id",
+                                """
+                                SELECT ai.*, dt.name AS deliverable_name
+                                FROM assessment_items ai
+                                LEFT JOIN deliverable_types dt ON dt.id = ai.deliverable_type_id
+                                WHERE ai.course_id = ? ORDER BY ai.id
+                                """,
                                 (template_course["id"],),
                             ).fetchall()
                         ],
@@ -2495,11 +3049,19 @@ class RotaHandler(SimpleHTTPRequestHandler):
                 "gradeResultsPublished": "grade_results_published",
             }
             updates = {column: data[key] for key, column in mapping.items() if key in data}
+            if "status" in updates and updates["status"] not in {"Rascunho", "Publicada", "Arquivada"}:
+                self.error_response("Escolha Rascunho, Publicada ou Arquivada.")
+                return
             for flag in ("public_overview", "public_schedule", "public_articles", "public_resources", "public_chat", "grade_results_published"):
                 if flag in updates:
                     updates[flag] = 1 if updates[flag] else 0
             if "drive_url" in updates:
-                updates["drive_connected"] = 1 if updates["drive_url"] else 0
+                updates["drive_connected"] = 0
+                updates["drive_sync_status"] = "credentials_required" if updates["drive_url"] else "pending"
+                updates["drive_sync_error"] = (
+                    "Clique em sincronizar para validar a pasta e copiar os arquivos."
+                    if updates["drive_url"] else ""
+                )
             if "grade_scale_json" in updates:
                 scale = updates["grade_scale_json"]
                 if not isinstance(scale, list) or len(scale) < 2:
@@ -2540,6 +3102,21 @@ class RotaHandler(SimpleHTTPRequestHandler):
                     f"UPDATE courses SET {query}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                     (*updates.values(), course["id"]),
                 )
+                if updates.get("status") in {"Rascunho", "Arquivada"}:
+                    database.execute(
+                        "DELETE FROM auth_sessions WHERE student_id IN (SELECT id FROM students WHERE course_id = ?)",
+                        (course["id"],),
+                    )
+                    database.execute(
+                        """
+                        DELETE FROM specialist_auth_sessions WHERE specialist_id IN (
+                            SELECT ss.id FROM session_specialists ss
+                            JOIN class_sessions cs ON cs.id = ss.session_id
+                            WHERE cs.course_id = ?
+                        )
+                        """,
+                        (course["id"],),
+                    )
         self.json_response({"course": course_payload(code)})
 
     def upload_course_cover(self, code: str) -> None:
@@ -2893,10 +3470,15 @@ class RotaHandler(SimpleHTTPRequestHandler):
         try:
             session_id = int(form.getfirst("session_id", "0") or 0) or None
             article_id = int(form.getfirst("article_id", "0") or 0) or None
+            assessment_id = int(form.getfirst("assessment_id", "0") or 0) or None
             deliverable_type_id = int(form.getfirst("deliverable_type_id", "0") or 0) or None
         except (TypeError, ValueError):
             destination.unlink(missing_ok=True)
             self.error_response("Aula ou artigo inválido.")
+            return
+        if article_id and assessment_id:
+            destination.unlink(missing_ok=True)
+            self.error_response("Vincule o arquivo a um artigo ou a uma atividade, não aos dois.")
             return
         description = str(form.getfirst("description", ""))[:500]
         mime_type = file_field.type or mimetypes.guess_type(original_name)[0] or "application/octet-stream"
@@ -2946,16 +3528,38 @@ class RotaHandler(SimpleHTTPRequestHandler):
                     destination.unlink(missing_ok=True)
                     self.error_response("Somente o aluno que escolheu o artigo pode enviar sua resenha e apresentação.", 403)
                     return
+            if assessment_id:
+                assessment = database.execute(
+                    """
+                    SELECT id, due_at, deliverable_type_id, requires_upload
+                    FROM assessment_items
+                    WHERE id = ? AND course_id = ? AND active = 1
+                    """,
+                    (assessment_id, student["course_id"]),
+                ).fetchone()
+                if not assessment or not assessment["requires_upload"]:
+                    destination.unlink(missing_ok=True)
+                    self.error_response("Esta atividade não aceita envio de arquivo.", 404)
+                    return
+                if assessment["deliverable_type_id"] != deliverable_type_id:
+                    destination.unlink(missing_ok=True)
+                    self.error_response("Use o tipo de entrega definido para esta atividade.")
+                    return
+                deadline = str(assessment["due_at"] or "")
+                if deadline and deadline <= datetime.now(APP_TIMEZONE).strftime("%Y-%m-%dT%H:%M"):
+                    destination.unlink(missing_ok=True)
+                    self.error_response("O prazo desta atividade terminou.", 409)
+                    return
             cursor = database.execute(
                 """
                 INSERT INTO uploads
-                    (course_id, student_id, session_id, article_id, deliverable_type_id, filename, stored_name,
-                     description, mime_type, size_bytes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (course_id, student_id, session_id, article_id, assessment_id, deliverable_type_id,
+                     filename, stored_name, description, mime_type, size_bytes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    student["course_id"], student["id"], session_id, article_id, deliverable_type_id, original_name,
-                    stored_name, description, mime_type, size,
+                    student["course_id"], student["id"], session_id, article_id, assessment_id,
+                    deliverable_type_id, original_name, stored_name, description, mime_type, size,
                 ),
             )
             upload = database.execute("SELECT * FROM uploads WHERE id = ?", (cursor.lastrowid,)).fetchone()
@@ -2967,6 +3571,7 @@ class RotaHandler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     initialize_database()
+    start_drive_sync_worker()
     host = os.environ.get(
         "APP_HOST", "0.0.0.0" if os.environ.get("RAILWAY_ENVIRONMENT_ID") else "127.0.0.1"
     )

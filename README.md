@@ -4,9 +4,10 @@ Aplicação navegável para as disciplinas da Profa. Lídia Rebello Dias (PEA/EP
 
 ## Executar
 
-O projeto usa somente a biblioteca padrão do Python 3. Não é necessário instalar pacotes.
+Instale as dependências da integração com o Google Drive e inicie o servidor:
 
 ```bash
+python3 -m pip install -r requirements.txt
 python3 server.py
 ```
 
@@ -27,9 +28,13 @@ A imagem Docker escuta a porta do Railway e grava o SQLite e os materiais em um 
 - `PORT=8080`;
 - `ADMIN_USERNAME=professora`;
 - `ADMIN_PASSWORD` com uma senha forte;
+- `GOOGLE_SERVICE_ACCOUNT_JSON` com o JSON completo (ou em Base64) de uma conta de serviço com acesso somente leitura ao Drive;
+- `GOOGLE_DRIVE_SYNC_HOURS=6` para definir o intervalo de sincronização automática;
 - healthcheck em `/api/health`.
 
 Sem `ADMIN_PASSWORD`, o painel administrativo fica indisponível no Railway. Localmente ele continua liberado para desenvolvimento, a menos que `ALLOW_INSECURE_ADMIN=0` seja definido. Em produção, a professora entra pelo modal do próprio site; a senha é trocada por um token administrativo temporário de 12 horas e não há mais janela nativa de HTTP Basic.
+
+Para sincronizar uma pasta privada, compartilhe-a com o `client_email` da conta de serviço configurada. O painel mostra esse endereço. Os arquivos são copiados para `/data/drive-sync`, registrados no SQLite e servidos por uma rota protegida; o link da pasta, sozinho, não concede acesso.
 
 ### Acesso de demonstração
 
@@ -51,10 +56,12 @@ Para entrar em PEA5004:
 - inscrição persistente de grupos para apresentação de artigos e trabalhos finais;
 - tipos de entrega configuráveis (resenha, artigo, apresentação, artigo final e novas categorias);
 - envio autenticado de material pelo aluno, vinculado ao tipo, à aula e opcionalmente a um artigo, com limite de 25 MB;
+- central privada do aluno com artigo escolhido, atividades exigidas, prazos, estado de conclusão e envio direto por atividade;
 - consulta dos materiais recebidos no painel docente;
-- cadastro de novas disciplinas em branco ou por clonagem de agenda, temas, especialistas, artigos e tipos de entrega, com recálculo das datas;
-- vínculo do endereço da pasta principal do Google Drive;
-- seletor entre PEA5003, PEA5004, PEA5714 e novas disciplinas cadastradas;
+- cadastro de novas disciplinas em branco ou por clonagem de agenda, temas, especialistas, artigos, avaliações e tipos de entrega, com recálculo das datas e sem copiar alunos ou acessos;
+- publicação, rascunho e arquivamento: somente disciplinas publicadas aparecem no site; arquivadas ficam exclusivas do painel docente e invalidam sessões da turma;
+- sincronização manual e automática do Google Drive para o volume persistente, com downloads autenticados e opção de materiais públicos;
+- seletor público limitado às disciplinas publicadas e catálogo completo no painel docente;
 - capas cinematográficas, trilha, ementa, objetivos, acervo e dicas de apresentação;
 - uso da marca da Escola Politécnica da USP fornecida para o projeto.
 
@@ -71,6 +78,8 @@ O banco é inicializado em `server.py` com estas entidades principais:
 - `presentation_reservations` — inscrições dos grupos em artigos e trabalhos finais;
 - `deliverable_types` — categorias de materiais configuradas pela professora;
 - `uploads` — metadados dos materiais enviados e seu tipo de entrega;
+- `drive_items` — cópia sincronizada e protegida dos arquivos do Google Drive;
+- `assessment_items` e `student_grades` — atividades, entregas obrigatórias, pesos e notas;
 - `auth_sessions` — tokens temporários dos alunos.
 
 As datas são avaliadas no fuso `America/Belem`, coerente com o ambiente da aplicação. Arquivos em `uploads/` não são publicados diretamente pelo servidor.
@@ -81,8 +90,8 @@ O protótipo já possui persistência e autorização básica do aluno, mas aind
 
 1. política de privacidade/LGPD, backup e política de retenção dos dados de alunos;
 2. validação de tipo, antivírus e armazenamento privado para arquivos enviados;
-3. OAuth do Google e Drive API para sincronizar automaticamente pastas e metadados — o protótipo atual salva e abre o link da pasta, sem copiar seu conteúdo;
-4. recuperação de acesso e auditoria detalhada.
+3. antivírus/inspeção de arquivos e uma política institucional de permissões para a conta de serviço do Google;
+4. envio real da recuperação de acesso pelo Resend e auditoria detalhada.
 
 ## Arquivos principais
 

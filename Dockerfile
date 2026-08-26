@@ -7,6 +7,9 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8080 \
     PEA_DATA_DIR=/data
 
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
 RUN mkdir -p /data
