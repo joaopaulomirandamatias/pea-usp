@@ -910,6 +910,11 @@ select option { color: var(--ink-2); background: #fff; }
 .drive-card .admin-button:hover, .specialist-invite-manager .admin-button:hover, .admin-room-grid .admin-button:hover, .specialist-header .admin-button:hover { color: var(--ink); background: var(--teal); border-color: var(--teal); }
 .specialist-resource-form select { color: var(--ink-2); background: #fff; color-scheme: light; }
 
+@media (min-width: 901px) {
+  .grades-locked { padding-right: 112px; }
+  .grades-locked .secondary-button { white-space: nowrap; }
+}
+
 @media (max-width: 900px) {
   .room-grid, .specialist-grid, .specialist-hero, .admin-room-grid, .grades-dashboard { grid-template-columns: 1fr; }
   .room-grid > section + section { border-top: 1px solid rgba(255,255,255,.12); border-left: 0; }
