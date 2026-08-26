@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import base64
 import cgi
 import json
 import mimetypes
+import os
 import re
 import secrets
 import sqlite3
@@ -20,10 +22,21 @@ from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "disciplinas.db"
-UPLOAD_DIR = ROOT / "uploads"
+DATA_DIR = Path(
+    os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    or os.environ.get("PEA_DATA_DIR")
+    or ROOT
+).resolve()
+DB_PATH = DATA_DIR / "disciplinas.db"
+UPLOAD_DIR = DATA_DIR / "uploads"
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 APP_TIMEZONE = ZoneInfo("America/Belem")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "professora")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+ALLOW_INSECURE_ADMIN = os.environ.get(
+    "ALLOW_INSECURE_ADMIN",
+    "0" if os.environ.get("RAILWAY_ENVIRONMENT_ID") else "1",
+).lower() in {"1", "true", "yes"}
 
 
 def local_today_iso() -> str:
@@ -225,7 +238,8 @@ def connect() -> sqlite3.Connection:
 
 
 def initialize_database() -> None:
-    UPLOAD_DIR.mkdir(exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     with connect() as database:
         database.executescript(SCHEMA)
         if database.execute("SELECT COUNT(*) FROM courses").fetchone()[0]:
@@ -422,6 +436,47 @@ class RotaHandler(SimpleHTTPRequestHandler):
         except (UnicodeDecodeError, json.JSONDecodeError):
             return {}
 
+    @staticmethod
+    def is_admin_path(path: str) -> bool:
+        return (
+            path in {"/admin", "/admin.html", "/admin.js"}
+            or path == "/api/admin"
+            or path.startswith("/api/admin/")
+        )
+
+    def require_admin(self, path: str) -> bool:
+        if not self.is_admin_path(path):
+            return True
+        if not ADMIN_PASSWORD:
+            if ALLOW_INSECURE_ADMIN:
+                return True
+            self.error_response("Painel administrativo indisponível: defina ADMIN_PASSWORD.", 503)
+            return False
+        authorization = self.headers.get("Authorization", "")
+        if authorization.startswith("Basic "):
+            try:
+                decoded = base64.b64decode(
+                    authorization.removeprefix("Basic "), validate=True
+                ).decode("utf-8")
+                username, password = decoded.split(":", 1)
+            except (ValueError, UnicodeDecodeError):
+                username, password = "", ""
+            if secrets.compare_digest(username, ADMIN_USERNAME) and secrets.compare_digest(
+                password, ADMIN_PASSWORD
+            ):
+                return True
+        body = "Acesso administrativo restrito.".encode("utf-8")
+        self.send_response(HTTPStatus.UNAUTHORIZED)
+        self.send_header(
+            "WWW-Authenticate", 'Basic realm="Painel da professora", charset="UTF-8"'
+        )
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     def bearer_student(self) -> sqlite3.Row | None:
         authorization = self.headers.get("Authorization", "")
         if not authorization.startswith("Bearer "):
@@ -441,8 +496,16 @@ class RotaHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         path = unquote(urlparse(self.path).path)
+        if not self.require_admin(path):
+            return
         if path == "/api/health":
-            self.json_response({"status": "ok", "database": DB_PATH.name, "today": local_today_iso()})
+            self.json_response(
+                {
+                    "status": "ok",
+                    "storage": "persistent" if DATA_DIR != ROOT else "local",
+                    "today": local_today_iso(),
+                }
+            )
             return
         if path == "/api/courses":
             with connect() as database:
@@ -506,6 +569,8 @@ class RotaHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         path = unquote(urlparse(self.path).path)
+        if not self.require_admin(path):
+            return
         if path == "/api/auth/login":
             self.login_student()
             return
@@ -531,6 +596,8 @@ class RotaHandler(SimpleHTTPRequestHandler):
 
     def do_PUT(self) -> None:  # noqa: N802
         path = unquote(urlparse(self.path).path)
+        if not self.require_admin(path):
+            return
         match = re.fullmatch(r"/api/admin/courses/([A-Za-z0-9_-]+)", path)
         if match:
             self.update_course(match.group(1))
@@ -543,6 +610,8 @@ class RotaHandler(SimpleHTTPRequestHandler):
 
     def do_PATCH(self) -> None:  # noqa: N802
         path = unquote(urlparse(self.path).path)
+        if not self.require_admin(path):
+            return
         match = re.fullmatch(r"/api/admin/students/(\d+)", path)
         if match:
             data = self.read_json()
@@ -560,6 +629,8 @@ class RotaHandler(SimpleHTTPRequestHandler):
 
     def do_DELETE(self) -> None:  # noqa: N802
         path = unquote(urlparse(self.path).path)
+        if not self.require_admin(path):
+            return
         for pattern, table, label in [
             (r"/api/admin/students/(\d+)", "students", "Aluno"),
             (r"/api/admin/sessions/(\d+)", "class_sessions", "Aula"),
@@ -845,8 +916,10 @@ class RotaHandler(SimpleHTTPRequestHandler):
 
 def main() -> None:
     initialize_database()
-    host = "127.0.0.1"
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 4173
+    host = os.environ.get(
+        "APP_HOST", "0.0.0.0" if os.environ.get("RAILWAY_ENVIRONMENT_ID") else "127.0.0.1"
+    )
+    port = int(os.environ.get("PORT", sys.argv[1] if len(sys.argv) > 1 else "4173"))
     server = ThreadingHTTPServer((host, port), RotaHandler)
     print(f"Rota da Disciplina em http://{host}:{port}")
     print(f"SQLite: {DB_PATH}")

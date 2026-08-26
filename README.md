@@ -18,6 +18,19 @@ Abra:
 
 O arquivo `disciplinas.db` e a pasta `uploads/` são criados automaticamente na primeira execução.
 
+## Executar no Railway
+
+A imagem Docker escuta a porta do Railway e grava o SQLite e os materiais em um volume persistente. Configure o serviço com:
+
+- volume montado em `/data`;
+- `PEA_DATA_DIR=/data`;
+- `PORT=8080`;
+- `ADMIN_USERNAME=professora`;
+- `ADMIN_PASSWORD` com uma senha forte;
+- healthcheck em `/api/health`.
+
+Sem `ADMIN_PASSWORD`, o painel administrativo fica indisponível no Railway. Localmente ele continua liberado para desenvolvimento, a menos que `ALLOW_INSECURE_ADMIN=0` seja definido.
+
 ### Acesso de demonstração
 
 Para entrar em PEA5004:
@@ -60,11 +73,10 @@ As datas são avaliadas no fuso `America/Belem`, coerente com o ambiente da apli
 
 O protótipo já possui persistência e autorização básica do aluno, mas ainda precisa destas camadas para uso institucional:
 
-1. autenticação da professora e proteção das rotas administrativas;
-2. HTTPS, política de privacidade/LGPD, backup e política de retenção dos dados de alunos;
-3. validação de tipo, antivírus e armazenamento privado para arquivos enviados;
-4. OAuth do Google e Drive API para sincronizar automaticamente pastas e metadados — o protótipo atual salva e abre o link da pasta, sem copiar seu conteúdo;
-5. recuperação de acesso, auditoria e implantação em servidor institucional.
+1. política de privacidade/LGPD, backup e política de retenção dos dados de alunos;
+2. validação de tipo, antivírus e armazenamento privado para arquivos enviados;
+3. OAuth do Google e Drive API para sincronizar automaticamente pastas e metadados — o protótipo atual salva e abre o link da pasta, sem copiar seu conteúdo;
+4. recuperação de acesso e auditoria detalhada.
 
 ## Arquivos principais
 

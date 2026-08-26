@@ -1,0 +1,8 @@
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+disciplinas.db*
+uploads/
+deploy/
+*.log
