@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071522">
+  <title>Área do especialista · PEA/USP</title>
+  <link rel="icon" href="assets/epusp-logo.webp" type="image/webp">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="specialist-page specialist-locked">
+  <div class="page-noise" aria-hidden="true"></div>
+  <header class="specialist-header">
+    <a class="wordmark" href="index.html"><img class="epusp-seal" src="assets/epusp-logo.webp" alt="" width="44" height="44"><span>Rota<br>da disciplina</span></a>
+    <div><span class="eyebrow">Área temporária</span><strong id="specialistHeaderName">Especialista convidado</strong></div>
+    <button class="admin-button" id="specialistLogout">Sair</button>
+  </header>
+
+  <main class="specialist-shell" id="specialistContent">
+    <section class="specialist-hero">
+      <div><span class="eyebrow" id="specialistCourseCode">PEA</span><h1 id="specialistSessionTitle">Sua aula, seus materiais.</h1><p>Prepare o encontro, publique slides e converse com a turma em uma área limitada somente a esta aula.</p></div>
+      <a class="meeting-link specialist-meet" id="specialistMeet" href="#" target="_blank" rel="noopener noreferrer" hidden><span class="meeting-camera" aria-hidden="true"></span><span><strong>Entrar no Google Meet</strong><small>Link protegido desta aula</small></span><b>↗</b></a>
+    </section>
+
+    <div class="specialist-grid">
+      <section class="admin-panel">
+        <header class="panel-heading"><div><h2>Perfil e contato</h2><p>Estas informações ficam disponíveis para a turma autenticada.</p></div><span class="eyebrow">Convidado</span></header>
+        <form class="panel-body specialist-profile-form" id="specialistProfileForm">
+          <label class="admin-field">Nome<input name="name" readonly></label>
+          <label class="admin-field">Cargo / instituição<input name="role"></label>
+          <label class="admin-field">E-mail<input name="email" type="email"></label>
+          <label class="admin-field">LinkedIn<input name="linkedin" type="url" placeholder="https://linkedin.com/in/..."></label>
+          <label class="admin-field">WhatsApp<input name="whatsapp" placeholder="+55 11 ..."></label>
+          <label class="admin-field">Site<input name="website" type="url" placeholder="https://..."></label>
+          <button class="admin-button primary" type="submit">Salvar contatos</button>
+        </form>
+      </section>
+
+      <section class="admin-panel specialist-resources">
+        <header class="panel-heading"><div><h2>Slides e materiais</h2><p>Adicione referências para esta aula.</p></div><span class="eyebrow" id="specialistResourceCount">0 itens</span></header>
+        <div class="panel-body" id="specialistResourceList"></div>
+        <form class="panel-body specialist-resource-form" id="specialistResourceForm">
+          <div class="form-columns"><label>Título<input name="title" required></label><label>Tipo<select name="resource_type"><option value="slide">Slides</option><option value="material">Material</option><option value="link">Link</option></select></label></div>
+          <label>Link<input name="url" type="url" placeholder="https://..."></label>
+          <label>Contexto<textarea name="content_html" rows="3" placeholder="Descreva como este material será usado."></textarea></label>
+          <label class="choice-toggle"><input name="public" type="checkbox"><span><strong>Tornar público</strong><small>Visitantes verão este item apenas se a professora também liberar materiais públicos.</small></span></label>
+          <button class="admin-button primary" type="submit">Adicionar material</button>
+        </form>
+      </section>
+    </div>
+
+    <section class="admin-panel specialist-chat">
+      <header class="panel-heading"><div><h2>Mural da aula</h2><p>Perguntas, links e comentários da professora, do especialista e da turma.</p></div><span class="eyebrow">Conversa</span></header>
+      <div class="panel-body room-comment-list" id="specialistCommentList"></div>
+      <form class="panel-body rich-comment-form" id="specialistCommentForm"><div class="rich-toolbar"><button type="button" data-command="bold"><strong>B</strong></button><button type="button" data-command="italic"><em>I</em></button><button type="button" data-command="insertUnorderedList">• Lista</button></div><div class="rich-editor" id="specialistCommentEditor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Escreva uma orientação ou responda à turma…"></div><button class="primary-button" type="submit">Publicar comentário</button></form>
+    </section>
+  </main>
+
+  <dialog class="app-dialog access-dialog" id="specialistLoginDialog">
+    <form class="dialog-card access-card" id="specialistLoginForm">
+      <div class="credential-head"><span class="credential-pulse"></span><span>Convite da aula</span><small>Temporário</small></div>
+      <span class="eyebrow">Área do especialista</span><h2>Abra sua sala.</h2>
+      <p>Cole o token ou use o link enviado pela professora. O acesso vale somente para uma aula.</p>
+      <label>Token do convite<input name="token" autocomplete="one-time-code" required></label>
+      <p class="form-error" id="specialistLoginError" role="alert"></p>
+      <button class="primary-button access-submit" type="submit"><span>Entrar na aula</span><b>→</b></button>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="specialist.js"></script>
+</body>
+</html>

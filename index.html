@@ -31,6 +31,7 @@
     <a href="#ementa" data-cinematic-link="ementa"><i>04</i><span>Ementa</span></a>
     <a href="#materiais" data-cinematic-link="materiais"><i>05</i><span>Materiais</span></a>
     <a href="#apresentacao" data-cinematic-link="apresentacao"><i>06</i><span>Sua cena</span></a>
+    <a href="#notas" data-cinematic-link="notas"><i>07</i><span>Notas</span></a>
   </nav>
 
   <header class="site-header" id="siteHeader">
@@ -47,6 +48,7 @@
       <a href="#trilha">Trilha</a>
       <a href="#materiais">Materiais</a>
       <a href="#apresentacao">Apresentação</a>
+      <a href="#notas">Notas</a>
     </nav>
     <div class="header-actions">
       <a class="icon-link" href="admin.html" aria-label="Abrir painel da professora">Painel docente</a>
@@ -170,6 +172,28 @@
           <h3>Não há uma próxima aula cadastrada.</h3>
           <p>A professora pode incluir novas datas no painel docente.</p>
         </div>
+
+        <section class="class-room reveal" id="sala-aula" aria-labelledby="classRoomTitle">
+          <header class="room-header">
+            <div><span class="eyebrow">Sala da aula</span><h3 id="classRoomTitle">Materiais e conversa do encontro</h3><p id="classRoomSubtitle">Entre com seu token para abrir a sala protegida.</p></div>
+            <span class="room-access-state" id="roomAccessState">Acesso da turma</span>
+          </header>
+          <div class="room-locked" id="roomLocked">
+            <span aria-hidden="true">⌁</span><div><strong>Esta camada pertence à turma.</strong><p>Meet, materiais do encontro e mural aparecem aqui depois do login.</p></div><button class="secondary-button" id="roomLoginButton" type="button">Entrar com token</button>
+          </div>
+          <div class="room-grid" id="roomGrid" hidden>
+            <section class="room-resources"><div class="room-column-head"><h4>Materiais da aula</h4><span id="resourceCount">0 itens</span></div><div id="roomResourceList"></div>
+              <form class="room-resource-form" id="roomResourceForm">
+                <div class="form-columns"><label>Título<input name="title" required placeholder="Ex.: referências sobre segurança"></label><label>Tipo<select name="resource_type"><option value="link">Link</option><option value="material">Material</option><option value="slide">Slides</option></select></label></div>
+                <label>Endereço<input name="url" type="url" required placeholder="https://..."></label>
+                <button class="secondary-button" type="submit">Adicionar link</button>
+              </form>
+            </section>
+            <section class="room-chat"><div class="room-column-head"><h4>Mural da aula</h4><span>Professora · especialista · turma</span></div><div class="room-comment-list" id="roomCommentList"></div>
+              <form class="rich-comment-form" id="roomCommentForm"><div class="rich-toolbar" aria-label="Formatação"><button type="button" data-rich-command="bold"><strong>B</strong></button><button type="button" data-rich-command="italic"><em>I</em></button><button type="button" data-rich-command="insertUnorderedList">• Lista</button><button type="button" data-rich-link>Link</button><span class="rich-link-fields" id="roomRichLinkFields" hidden><input id="roomRichLink" type="url" placeholder="https://..."><button id="applyRoomRichLink" type="button">Aplicar</button></span></div><div class="rich-editor" id="roomCommentEditor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Compartilhe uma pergunta, referência ou comentário…"></div><button class="primary-button" type="submit">Publicar no mural</button></form>
+            </section>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -265,13 +289,29 @@
         <div class="presentation-copy reveal">
           <p class="eyebrow">Apresentação de artigos</p>
           <h2 id="presentationTitle">Entre em cena.<br><em>Defenda uma ideia.</em></h2>
-          <p>Escolha uma etapa, forme seu grupo e reserve a apresentação. As orientações da professora aparecem antes do envio.</p>
-          <button class="primary-button light protected-action" data-action="presentation">Cadastrar apresentação <span aria-hidden="true">↘</span></button>
+          <p>Quando a professora abrir as escolhas, confirme um artigo. A reserva é definitiva: depois disso, entregue a resenha e a apresentação até o prazo.</p>
+          <div class="student-assignment-panel" id="studentAssignmentPanel"><p>Entre com seu token para consultar sua escolha e as entregas obrigatórias.</p></div>
+          <button class="primary-button light protected-action" data-action="presentation">Escolher meu artigo <span aria-hidden="true">↘</span></button>
         </div>
         <aside class="tip-reel reveal">
           <p class="eyebrow">4 truques de apresentação</p>
           <ol id="tipList"></ol>
         </aside>
+      </div>
+    </section>
+
+    <section class="grades-section section-pad cine-scene" id="notas" data-cinematic-scene="notas" aria-labelledby="gradesTitle">
+      <div class="shell">
+        <header class="section-heading reveal">
+          <div class="section-index"><span>06</span><i></i><small>Avaliação</small></div>
+          <div><p class="eyebrow">Seu desempenho na disciplina</p><h2 id="gradesTitle">Cada entrega.<br>Um novo sinal.</h2></div>
+          <p class="grades-intro">Notas, pesos e devolutivas aparecem somente para você. Quando todas as avaliações forem corrigidas, o resultado final se transforma em um emblema.</p>
+        </header>
+        <div class="grades-locked reveal" id="gradesLocked"><span aria-hidden="true">◇</span><div><strong>Seu boletim é privado.</strong><p>Entre com o token individual para consultar as avaliações e o conceito final.</p></div><button class="secondary-button" id="gradesLoginButton" type="button">Abrir meu boletim</button></div>
+        <div class="grades-dashboard reveal" id="gradesDashboard" hidden>
+          <aside class="final-grade-card" id="finalGradeCard"><span class="eyebrow">Resultado consolidado</span><div class="final-concept pending" id="finalConcept">…</div><strong id="finalScore">Aguardando avaliações</strong><p id="finalGradeDetail">O emblema final será liberado após todas as correções.</p><div class="grade-progress"><span id="gradeProgressBar"></span></div></aside>
+          <div class="student-grade-cards" id="studentGradeCards"></div>
+        </div>
       </div>
     </section>
   </main>
@@ -295,16 +335,17 @@
       </div>
       <span class="eyebrow">Credencial da turma</span>
       <h2>Entre na rota.</h2>
-      <p>Informe um dos dados cadastrados pela professora. Após a validação, uma credencial temporária libera o Meet e os materiais da disciplina.</p>
-      <label class="access-identity-field">E-mail ou Número USP
-        <input name="identifier" autocomplete="username" placeholder="voce@usp.br ou 12345678" required>
+      <p>Use o token individual fornecido pela professora. Depois da validação, uma sessão temporária libera sua sala, escolhas e entregas.</p>
+      <label class="access-identity-field">Token de acesso
+        <input name="identifier" autocomplete="one-time-code" placeholder="PEA-..." required>
       </label>
       <div class="token-contract" aria-label="Detalhes da sessão">
         <span><small>Validade</small><strong>12 horas</strong></span>
         <span><small>Escopo</small><strong id="accessScope">Esta disciplina</strong></span>
         <span><small>Proteção</small><strong>Token individual</strong></span>
       </div>
-      <p class="form-hint">Ambiente de demonstração: use <strong>12345678</strong> ou <strong>ana.souza@usp.br</strong>.</p>
+      <button class="text-button access-recovery-trigger" id="accessRecoveryButton" type="button">Esqueci meu token</button>
+      <div class="access-recovery" id="accessRecovery" hidden><label>E-mail ou Nº USP<input id="recoveryIdentifier" placeholder="voce@usp.br ou 12345678"></label><button class="secondary-button" id="requestAccessButton" type="button">Registrar recuperação</button><small>O envio automático por e-mail será conectado ao Resend futuramente.</small></div>
       <p class="form-error" id="accessError" role="alert"></p>
       <button class="primary-button access-submit" value="default" type="submit"><span>Gerar credencial e entrar</span><b aria-hidden="true">→</b></button>
     </form>
@@ -314,18 +355,18 @@
     <form method="dialog" class="dialog-card wide" id="presentationForm">
       <button class="dialog-close" type="button" data-close="presentationDialog" aria-label="Fechar">×</button>
       <span class="eyebrow">Reserva de apresentação</span>
-      <h2>Sua cena no semestre</h2>
+      <h2>Escolha seu artigo</h2>
+      <p class="choice-contract">A primeira confirmação bloqueia o artigo para os demais. Você não poderá remover nem trocar a escolha; somente a professora poderá liberá-la.</p>
       <div class="form-columns">
         <label>Tipo de apresentação<select name="kind" id="presentationKind" required><option value="article">Artigo da aula</option><option value="final">Trabalho final</option></select></label>
         <label>Artigo ou aula<select name="target_id" id="presentationTargetSelect" required></select></label>
       </div>
-      <div class="form-columns">
-        <label>Nome do grupo<input name="group" placeholder="Ex.: Grupo Farol" required></label>
-        <label>Tema do trabalho<input name="topic" placeholder="Obrigatório para trabalho final"></label>
+      <div id="finalPresentationFields" hidden>
+        <div class="form-columns"><label>Nome do grupo<input name="group" placeholder="Ex.: Grupo Farol"></label><label>Tema do trabalho<input name="topic" placeholder="Tema do projeto final"></label></div>
+        <label>Integrantes<textarea name="members" rows="3" placeholder="Nome e Nº USP, um por linha"></textarea></label>
+        <label>Link dos slides no Drive<input name="slides" type="url" placeholder="https://drive.google.com/..."></label>
       </div>
-      <label>Integrantes<textarea name="members" rows="3" placeholder="Nome e Nº USP, um por linha" required></textarea></label>
-      <label>Link dos slides no Drive<input name="slides" type="url" placeholder="https://drive.google.com/..."></label>
-      <div class="dialog-actions"><button class="text-button" type="button" data-close="presentationDialog">Cancelar</button><button class="primary-button" type="submit" value="default">Reservar apresentação</button></div>
+      <div class="dialog-actions"><button class="text-button" type="button" data-close="presentationDialog">Cancelar</button><button class="primary-button" type="submit" value="default">Confirmar escolha</button></div>
     </form>
   </dialog>
 

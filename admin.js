@@ -8,6 +8,7 @@
   currentCode = course.code;
   let remoteCourse = null;
   let editingSessionId = null;
+  let currentTeacher = null;
   let toastTimer;
   const adminTokenKey = 'rota-admin-token';
 
@@ -16,9 +17,10 @@
   const esc = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 
   async function apiRequest(path, options = {}) {
-    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    const headers = { ...(options.headers || {}) };
+    if (!(options.body instanceof FormData)) headers['Content-Type'] = 'application/json';
     const adminToken = sessionStorage.getItem(adminTokenKey);
-    if (adminToken && path.startsWith('/api/admin')) headers.Authorization = `Bearer ${adminToken}`;
+    if (adminToken && path.startsWith('/api/')) headers.Authorization = `Bearer ${adminToken}`;
     const response = await fetch(path, { ...options, headers });
     let payload = {};
     try { payload = await response.json(); } catch (error) { payload = {}; }
@@ -67,6 +69,25 @@
     if (element) element.textContent = value;
   }
 
+  function revealSecret({ eyebrow = 'Token criado', title = 'Copie agora.', copy = 'Este segredo só será exibido uma vez.', value }) {
+    setText('#secretRevealEyebrow', eyebrow);
+    setText('#secretRevealTitle', title);
+    setText('#secretRevealCopy', copy);
+    setText('#secretRevealValue', value);
+    $('#secretRevealDialog').showModal();
+  }
+
+  function setAdminView(view) {
+    const allowed = ['visao', 'disciplinas', 'aulas', 'pessoas', 'conteudo', 'configuracoes'];
+    const activeView = allowed.includes(view) ? view : 'visao';
+    $$('[data-admin-view]').forEach((element) => {
+      element.hidden = !element.dataset.adminView.split(/\s+/).includes(activeView);
+    });
+    $$('[data-admin-route]').forEach((link) => link.classList.toggle('active', link.dataset.adminRoute === activeView));
+    if (window.location.hash !== `#${activeView}`) window.history.replaceState({}, '', `${window.location.pathname}${window.location.search}#${activeView}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   function renderCourseTabs() {
     $('#courseTabs').innerHTML = state.courses.map((item) => `
       <button class="admin-course-tab ${item.code === course.code ? 'active' : ''}" data-course="${esc(item.code)}" style="background-image:url('${esc(item.cover)}')">
@@ -102,6 +123,17 @@
     setText('#coverCode', course.code);
     setText('#coverTitle', course.shortTitle);
     setText('#courseStatusLabel', course.status);
+    if (remoteCourse) {
+      $('#publicOverview').checked = Boolean(remoteCourse.public_overview);
+      $('#publicSchedule').checked = Boolean(remoteCourse.public_schedule);
+      $('#publicArticles').checked = Boolean(remoteCourse.public_articles);
+      $('#publicResources').checked = Boolean(remoteCourse.public_resources);
+      $('#publicChat').checked = Boolean(remoteCourse.public_chat);
+      const scale = Object.fromEntries((remoteCourse.grade_scale || []).map((item) => [item.letter, item.min]));
+      ['A', 'B', 'C'].forEach((letter) => {
+        if ($('#gradeScaleForm').elements[letter]) $('#gradeScaleForm').elements[letter].value = scale[letter] ?? { A: 8.5, B: 7, C: 5 }[letter];
+      });
+    }
   }
 
   function renderDrive() {
@@ -124,7 +156,7 @@
       const presenters = session.articles.flatMap((article) => article.presenters || []).map((student) => student.name);
       return `<div class="admin-list-row class-admin-row">
         <span class="class-date-chip ${dateClass}"><strong>${esc(formatClassDate(session.session_date, { day: '2-digit' }))}</strong><small>${esc(formatClassDate(session.session_date, { month: 'short' }))} · ${esc(session.start_time)}</small></span>
-        <div><strong>${esc(session.title)}</strong><small>${esc(session.theme || 'Tema a definir')} · ${session.articles.length} artigo${session.articles.length === 1 ? '' : 's'}${presenters.length ? ` · ${esc(presenters.join(', '))}` : ''}</small><span class="meet-admin-pill ${session.meet_url ? 'ready' : ''}">${session.meet_url ? 'Meet protegido configurado' : 'Meet não informado'}</span></div>
+        <div><strong>${esc(session.title)}</strong><small>${esc(session.theme || 'Tema a definir')} · ${session.articles.length} artigo${session.articles.length === 1 ? '' : 's'}${presenters.length ? ` · ${esc(presenters.join(', '))}` : ''}</small><span class="meet-admin-pill ${session.meet_url ? 'ready' : ''}">${session.meet_url ? 'Meet protegido configurado' : 'Meet não informado'}</span><span class="choice-admin-pill ${session.student_choice_enabled ? 'ready' : ''}">${session.student_choice_enabled ? `Escolha aberta${session.submission_deadline ? ` · até ${new Date(session.submission_deadline).toLocaleString('pt-BR')}` : ''}` : 'Escolha fechada'}</span></div>
         <div class="class-specialist-summary"><span>1º momento</span><strong>${esc(session.specialist_name || 'Especialista a confirmar')}</strong><small>${esc(session.specialist_role || session.specialist_topic || '—')}</small></div>
         <div class="class-row-actions"><button class="row-action" data-edit-class="${session.id}">Editar</button><button class="row-action" data-remove-class="${session.id}" aria-label="Remover aula ${esc(session.title)}">×</button></div>
       </div>`;
@@ -150,7 +182,8 @@
   function renderManagedArticles(session) {
     $('#managedArticleList').innerHTML = (session?.articles || []).map((article) => {
       const presenters = (article.presenters || []).map((student) => student.name).join(', ');
-      return `<article class="managed-article"><span>${esc(article.code || 'ART')}</span><div><strong>${esc(article.title)}</strong><small>${esc(article.author || 'Autoria a definir')} · ${presenters ? `Apresentação: ${esc(presenters)}` : 'Sem apresentador'}</small></div><button class="row-action" data-remove-article="${article.id}" aria-label="Remover ${esc(article.title)}">×</button></article>`;
+      const reservation = article.reservation?.student_name || presenters;
+      return `<article class="managed-article"><span>${esc(article.code || 'ART')}</span><div><strong>${esc(article.title)}</strong><small>${esc(article.author || 'Autoria a definir')} · ${reservation ? `Escolhido por ${esc(reservation)}` : 'Disponível para escolha'}</small></div><button class="row-action" data-remove-article="${article.id}" aria-label="Remover ${esc(article.title)}">×</button></article>`;
     }).join('') || '<p class="next-article-empty" style="color:#71898f">Nenhum artigo vinculado a esta aula.</p>';
     $$('[data-remove-article]').forEach((button) => button.addEventListener('click', async () => {
       try {
@@ -171,15 +204,34 @@
     const session = remoteCourse?.sessions?.find((item) => item.id === sessionId);
     setText('#classDialogTitle', session ? 'Editar aula' : 'Nova aula');
     $('#articleManager').hidden = !session;
+    $('#specialistInviteManager').hidden = !session;
+    $('#adminRoomManager').hidden = !session;
     if (session) {
-      ['session_date', 'start_time', 'title', 'theme', 'location', 'meet_url', 'specialist_name', 'specialist_role', 'specialist_topic', 'notes'].forEach((field) => {
+      ['session_date', 'start_time', 'title', 'theme', 'location', 'meet_url', 'specialist_name', 'specialist_role', 'specialist_topic', 'notes', 'submission_deadline'].forEach((field) => {
         form.elements[field].value = session[field] || '';
       });
+      form.elements.student_choice_enabled.checked = Boolean(session.student_choice_enabled);
+      const specialist = session.specialist || {};
+      form.elements.specialist_email.value = specialist.email || '';
+      form.elements.specialist_linkedin.value = specialist.linkedin || '';
+      form.elements.specialist_whatsapp.value = specialist.whatsapp || '';
+      form.elements.specialist_website.value = specialist.website || '';
       form.elements.session_id.value = session.id;
       renderManagedArticles(session);
       renderPresenterChecks();
+      loadAdminRoom(session.id);
     }
     $('#classDialog').showModal();
+  }
+
+  async function loadAdminRoom(sessionId = editingSessionId) {
+    if (!sessionId) return;
+    try {
+      const room = await apiRequest(`/api/courses/${encodeURIComponent(course.code)}/sessions/${sessionId}/room`);
+      setText('#adminRoomResourceCount', `${room.resources.length} ${room.resources.length === 1 ? 'item' : 'itens'}`);
+      $('#adminRoomResourceList').innerHTML = room.resources.map((item) => `<article class="room-resource"><span>${item.resource_type === 'slide' ? '▱' : '↗'}</span><div><small>${esc(item.author_name)} · ${esc(item.visibility)}</small><strong>${esc(item.title)}</strong>${item.content_html ? `<div>${item.content_html}</div>` : ''}</div>${item.url ? `<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">Abrir ↗</a>` : ''}</article>`).join('') || '<p class="room-empty">Nenhum material cadastrado.</p>';
+      $('#adminRoomCommentList').innerHTML = room.comments.map((item) => `<article class="room-comment"><div><strong>${esc(item.author_name)}</strong><span>${esc(item.author_role)}</span></div><div>${item.content_html}</div></article>`).join('') || '<p class="room-empty">O mural ainda está vazio.</p>';
+    } catch (error) { showToast(error.message); }
   }
 
   function renderUploads() {
@@ -188,8 +240,30 @@
     $('#uploadAdminList').innerHTML = uploads.map((upload) => {
       const extension = upload.filename.includes('.') ? upload.filename.split('.').pop() : 'arq';
       const size = upload.size_bytes < 1024 * 1024 ? `${Math.max(1, Math.round(upload.size_bytes / 1024))} KB` : `${(upload.size_bytes / 1024 / 1024).toFixed(1)} MB`;
-      return `<div class="admin-list-row upload-admin-row"><span class="file-badge">${esc(extension)}</span><div><strong>${esc(upload.filename)}</strong><small>${esc(upload.student_name)} · ${esc(upload.deliverable_type_name || 'Tipo não informado')} · ${esc(upload.description || 'Sem descrição')}</small></div><div class="upload-context"><strong>${esc(upload.session_title || 'Material geral')}</strong><br>${esc(upload.article_title || 'Sem artigo específico')}</div><div class="upload-file-actions"><span class="file-size">${size}</span><a class="row-action" href="/api/admin/uploads/${upload.id}/download">Baixar</a></div></div>`;
+      return `<div class="admin-list-row upload-admin-row"><span class="file-badge">${esc(extension)}</span><div><strong>${esc(upload.filename)}</strong><small>${esc(upload.student_name)} · ${esc(upload.deliverable_type_name || 'Tipo não informado')} · ${esc(upload.description || 'Sem descrição')}</small></div><div class="upload-context"><strong>${esc(upload.session_title || 'Material geral')}</strong><br>${esc(upload.article_title || 'Sem artigo específico')}</div><div class="upload-file-actions"><span class="file-size">${size}</span><button class="row-action" type="button" data-download-upload="${upload.id}">Baixar</button></div></div>`;
     }).join('') || '<div class="admin-list-row"><span class="row-index">—</span><div><strong>Nenhum material recebido</strong><small>Os arquivos enviados pelos alunos aparecerão aqui.</small></div><span></span><span></span></div>';
+    $$('[data-download-upload]').forEach((button) => button.addEventListener('click', async () => {
+      const upload = uploads.find((item) => item.id === Number(button.dataset.downloadUpload));
+      if (!upload) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/admin/uploads/${upload.id}/download`, {
+          headers: { Authorization: `Bearer ${sessionStorage.getItem(adminTokenKey) || ''}` }
+        });
+        if (!response.ok) {
+          let message = 'Não foi possível baixar este material.';
+          try { message = (await response.json()).error || message; } catch (error) { /* arquivo não JSON */ }
+          throw new Error(message);
+        }
+        const href = URL.createObjectURL(await response.blob());
+        const anchor = document.createElement('a');
+        anchor.href = href;
+        anchor.download = upload.filename;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(href), 1000);
+      } catch (error) { showToast(error.message); }
+      finally { button.disabled = false; }
+    }));
   }
 
   function renderModules() {
@@ -218,11 +292,26 @@
         <td><strong>${esc(student.name)}</strong></td>
         <td>${esc(student.email)}</td>
         <td>${esc(student.nusp)}</td>
-        <td>${esc(student.group_name || '—')}</td>
+        <td><button class="token-reset-button" data-reset-token="${student.id}">${student.access_token_hint ? `••••${esc(student.access_token_hint)}` : 'Gerar token'}</button></td>
         <td><button class="access-pill ${student.active ? '' : 'off'}" data-toggle-student="${student.id}">${student.active ? 'Liberado' : 'Bloqueado'}</button></td>
         <td><button class="row-action" data-remove-student="${student.id}" aria-label="Remover ${esc(student.name)}">×</button></td>
       </tr>
     `).join('') || '<tr><td colspan="6">Nenhum aluno cadastrado nesta disciplina.</td></tr>';
+
+    $$('[data-reset-token]').forEach((button) => button.addEventListener('click', async () => {
+      const student = students.find((item) => item.id === Number(button.dataset.resetToken));
+      if (!student) return;
+      if (student.access_token_hint && !window.confirm(`Gerar um novo token para ${student.name}? O token anterior deixará de funcionar.`)) return;
+      try {
+        const result = await apiRequest(`/api/admin/students/${student.id}/token`, { method: 'POST', body: '{}' });
+        revealSecret({
+          eyebrow: 'Token do aluno', title: `Acesso de ${student.name}`,
+          copy: 'Envie este token ao aluno por um canal seguro. Ele não será mostrado novamente.',
+          value: result.access_token
+        });
+        await loadRemoteAdmin();
+      } catch (error) { showToast(error.message); }
+    }));
 
     $$('[data-toggle-student]').forEach((button) => button.addEventListener('click', async () => {
       const student = students.find((item) => item.id === Number(button.dataset.toggleStudent));
@@ -302,6 +391,88 @@
     }));
   }
 
+  const assessmentKinds = {
+    review: 'Resenha', presentation: 'Apresentação', participation: 'Participação e perguntas',
+    article: 'Artigo', final_work: 'Trabalho final', other: 'Outra'
+  };
+
+  function conceptBadge(summary) {
+    const concept = summary?.concept;
+    if (!concept) return `<span class="grade-letter pending" title="${summary?.graded_count || 0} de ${summary?.total_count || 0} avaliações corrigidas">…</span>`;
+    return `<span class="grade-letter grade-${esc(concept.toLowerCase())}" title="Resultado final ${Number(summary.score).toFixed(1)}">${esc(concept)}</span>`;
+  }
+
+  function renderAssessments() {
+    const assessments = remoteCourse?.assessments || [];
+    const students = (remoteCourse?.students || []).filter((student) => student.active);
+    const summaries = remoteCourse?.student_grade_summaries || {};
+    const totalWeight = assessments.filter((item) => item.active).reduce((sum, item) => sum + Number(item.weight || 0), 0);
+    const activeSummaries = students.map((student) => summaries[String(student.id)]).filter(Boolean);
+    const readyToPublish = Boolean(assessments.some((item) => item.active) && students.length && activeSummaries.length === students.length && activeSummaries.every((summary) => summary.complete));
+    const resultsPublished = Boolean(remoteCourse?.grade_results_published);
+    setText('#assessmentWeightLabel', `${totalWeight.toLocaleString('pt-BR')}% configurado${Math.abs(totalWeight - 100) < .01 ? ' · completo' : ''}`);
+    $('#assessmentWeightLabel').classList.toggle('weight-warning', Boolean(assessments.length && Math.abs(totalWeight - 100) >= .01));
+    setText('#publishGradeResults', resultsPublished ? 'Resultados publicados' : readyToPublish ? 'Publicar resultados' : 'Corrija todas as notas');
+    $('#publishGradeResults').disabled = !resultsPublished && !readyToPublish;
+    $('#publishGradeResults').classList.toggle('published', resultsPublished);
+    $('#assessmentList').innerHTML = assessments.map((assessment, index) => {
+      const grades = new Map((assessment.grades || []).map((grade) => [Number(grade.student_id), grade]));
+      const kindOptions = Object.entries(assessmentKinds).map(([value, label]) => `<option value="${value}" ${assessment.kind === value ? 'selected' : ''}>${esc(label)}</option>`).join('');
+      const roster = students.map((student) => {
+        const grade = grades.get(Number(student.id));
+        const summary = summaries[String(student.id)];
+        return `<form class="grade-row" data-assessment-id="${assessment.id}" data-student-id="${student.id}">
+          <div class="grade-student">${conceptBadge(summary)}<span><strong>${esc(student.name)}</strong><small>Nº USP ${esc(student.nusp)}</small></span></div>
+          <label>Nota<input name="score" type="number" min="0" max="${assessment.max_score}" step="0.01" value="${grade?.score ?? ''}" placeholder="—"></label>
+          <label>Devolutiva<input name="feedback" maxlength="4000" value="${esc(grade?.feedback || '')}" placeholder="Comentário para o aluno"></label>
+          <button class="admin-button" type="submit">${grade ? 'Atualizar' : 'Lançar nota'}</button>
+        </form>`;
+      }).join('') || '<p class="assessment-empty">Cadastre alunos para lançar as notas.</p>';
+      return `<article class="assessment-card ${assessment.active ? '' : 'inactive'}">
+        <header class="assessment-card-head"><span class="assessment-index">${String(index + 1).padStart(2, '0')}</span><div><small>${esc(assessmentKinds[assessment.kind] || 'Avaliação')}</small><h3>${esc(assessment.name)}</h3></div><div class="assessment-weight"><strong>${Number(assessment.weight).toLocaleString('pt-BR')}%</strong><small>peso · máx. ${Number(assessment.max_score).toLocaleString('pt-BR')}</small></div></header>
+        <form class="assessment-settings" data-assessment-settings="${assessment.id}">
+          <label>Nome<input name="name" value="${esc(assessment.name)}" required maxlength="120"></label>
+          <label>Tipo<select name="kind">${kindOptions}</select></label>
+          <label>Máxima<input name="max_score" type="number" min="0.1" max="1000" step="0.1" value="${assessment.max_score}" required></label>
+          <label>Peso<input name="weight" type="number" min="0" max="100" step="0.1" value="${assessment.weight}" required></label>
+          <label>Prazo<input name="due_at" type="datetime-local" value="${esc(assessment.due_at || '')}"></label>
+          <label class="assessment-active"><input name="active" type="checkbox" ${assessment.active ? 'checked' : ''}> Ativa</label>
+          <button class="admin-button" type="submit">Salvar</button><button class="row-action" type="button" data-remove-assessment="${assessment.id}">Excluir</button>
+        </form>
+        <div class="grade-roster"><div class="grade-roster-head"><span>Diário de notas</span><small>${(assessment.grades || []).length} de ${students.length} lançadas</small></div>${roster}</div>
+      </article>`;
+    }).join('') || '<div class="assessment-empty large"><strong>O diário de avaliação está pronto.</strong><p>Crie a primeira avaliação acima. Os alunos cadastrados aparecerão automaticamente para o lançamento das notas.</p></div>';
+
+    $$('[data-assessment-settings]').forEach((form) => form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(form).entries());
+      values.active = form.elements.active.checked;
+      try {
+        await apiRequest(`/api/admin/assessments/${form.dataset.assessmentSettings}`, { method: 'PUT', body: JSON.stringify(values) });
+        await loadRemoteAdmin();
+        showToast('Configuração da avaliação atualizada.');
+      } catch (error) { showToast(error.message); }
+    }));
+    $$('.grade-row').forEach((form) => form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(form).entries());
+      try {
+        await apiRequest(`/api/admin/assessments/${form.dataset.assessmentId}/grades/${form.dataset.studentId}`, { method: 'PUT', body: JSON.stringify(values) });
+        await loadRemoteAdmin();
+        showToast('Nota salva e cartão do aluno atualizado.');
+      } catch (error) { showToast(error.message); }
+    }));
+    $$('[data-remove-assessment]').forEach((button) => button.addEventListener('click', async () => {
+      const assessment = assessments.find((item) => item.id === Number(button.dataset.removeAssessment));
+      if (!assessment || !window.confirm(`Excluir “${assessment.name}” e todas as notas lançadas nela?`)) return;
+      try {
+        await apiRequest(`/api/admin/assessments/${assessment.id}`, { method: 'DELETE' });
+        await loadRemoteAdmin();
+        showToast('Avaliação e suas notas foram removidas.');
+      } catch (error) { showToast(error.message); }
+    }));
+  }
+
   function renderPublication() {
     setText('#publishState', course.status === 'Publicada' ? 'Disciplina publicada' : course.status === 'Arquivada' ? 'Disciplina arquivada' : 'Rascunho privado');
     setText('#publishDetail', course.visibility);
@@ -310,7 +481,13 @@
 
   async function loadRemoteAdmin() {
     try {
-      remoteCourse = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`);
+      const [courseResult, meResult, openaiResult] = await Promise.all([
+        apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`),
+        apiRequest('/api/admin/me'),
+        apiRequest('/api/admin/openai/status')
+      ]);
+      remoteCourse = courseResult;
+      currentTeacher = meResult.teacher || currentTeacher;
       document.body.classList.remove('admin-locked');
       Object.assign(course, {
         title: remoteCourse.title,
@@ -318,11 +495,21 @@
         semester: remoteCourse.semester,
         status: remoteCourse.status,
         visibility: remoteCourse.visibility,
+        description: remoteCourse.description || course.description,
+        ementa: remoteCourse.ementa || course.ementa,
+        classDay: remoteCourse.class_day || course.classDay,
+        room: remoteCourse.room || course.room,
+        professor: remoteCourse.professor_name || course.professor,
         cover: remoteCourse.cover || course.cover,
         updatedAt: remoteCourse.updated_at
       });
       course.driveUrl = remoteCourse.drive_url || '';
       course.driveConnected = Boolean(remoteCourse.drive_connected);
+      if (currentTeacher?.name) {
+        setText('#teacherName', currentTeacher.name);
+        setText('#teacherInitials', currentTeacher.name.replace(/Profa?\.?/i, '').trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase());
+      }
+      setText('#openaiStatus', openaiResult.configured ? `Ativa · ${openaiResult.model}` : 'Desativada');
       window.CourseStore.save(state);
       renderCourseTabs();
       populateForm();
@@ -334,16 +521,23 @@
       renderUploads();
       renderSubmissions();
       renderDeliverableTypes();
+      renderAssessments();
       if ($('#classDialog').open && editingSessionId) {
         const updatedSession = remoteCourse.sessions.find((item) => item.id === editingSessionId);
         renderManagedArticles(updatedSession);
         renderPresenterChecks();
+      }
+      if (currentTeacher?.must_reset_password && !$('#passwordDialog').open) {
+        $('#passwordDialog').classList.add('password-required');
+        $('#passwordDialog .optional-close').hidden = true;
+        $('#passwordDialog').showModal();
       }
     } catch (error) {
       remoteCourse = null;
       renderClasses();
       renderUploads();
       renderDeliverableTypes();
+      renderAssessments();
       console.warn('Banco SQLite indisponível; painel em modo local.', error);
     }
   }
@@ -397,7 +591,13 @@
         body: JSON.stringify({
           title: course.title, shortTitle: course.shortTitle, semester: course.semester,
           cover: course.cover, driveUrl: course.driveUrl, status: course.status,
-          visibility: course.visibility
+          visibility: course.visibility, description: course.description, ementa: course.ementa,
+          classDay: course.classDay, room: course.room, professorName: course.professor,
+          publicOverview: $('#publicOverview').checked,
+          publicSchedule: $('#publicSchedule').checked,
+          publicArticles: $('#publicArticles').checked,
+          publicResources: $('#publicResources').checked,
+          publicChat: $('#publicChat').checked
         })
       });
       await loadRemoteAdmin();
@@ -411,6 +611,85 @@
   $('#saveButton').addEventListener('click', saveForm);
   $('#courseForm').addEventListener('submit', (event) => { event.preventDefault(); saveForm(); });
   $('#previewButton').addEventListener('click', () => window.open(`index.html?curso=${encodeURIComponent(course.code)}`, '_blank'));
+
+  $('#uploadCoverButton').addEventListener('click', async () => {
+    const file = $('#coverFileInput').files?.[0];
+    if (!file) { showToast('Selecione uma imagem para enviar.'); return; }
+    const payload = new FormData();
+    payload.append('cover', file);
+    try {
+      const result = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/cover`, { method: 'POST', body: payload });
+      course.cover = result.cover;
+      $('#coverFileInput').value = '';
+      await loadRemoteAdmin();
+      showToast('Nova capa publicada para a disciplina.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  async function fillWithAI(kind, form, fieldNames) {
+    const fields = Object.fromEntries(fieldNames.map((name) => [name, form.elements[name]?.value || '']));
+    try {
+      const result = await apiRequest('/api/admin/ai/fill', { method: 'POST', body: JSON.stringify({ kind, fields }) });
+      Object.entries(result.fields || {}).forEach(([name, value]) => {
+        if (form.elements[name]) form.elements[name].value = value;
+      });
+      showToast(`Sugestão gerada com ${result.model}. Revise antes de salvar.`);
+    } catch (error) { showToast(error.message); }
+  }
+
+  $('#aiCourseButton').addEventListener('click', () => fillWithAI('course', $('#courseForm'), ['title', 'shortTitle', 'description', 'ementa']));
+  $('#aiClassButton').addEventListener('click', () => fillWithAI('session', $('#classForm'), ['title', 'theme', 'specialist_topic', 'notes']));
+
+  $('#openaiKeyForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const apiKey = String(new FormData(event.currentTarget).get('api_key') || '').trim();
+    try {
+      const result = await apiRequest('/api/admin/openai/key', { method: 'POST', body: JSON.stringify({ api_key: apiKey }) });
+      event.currentTarget.reset();
+      setText('#openaiStatus', result.configured ? `Ativa · ${result.model}` : 'Desativada');
+      showToast('Assistente OpenAI ativado na memória do servidor.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  $('#clearOpenaiKey').addEventListener('click', async () => {
+    try {
+      await apiRequest('/api/admin/openai/key', { method: 'POST', body: JSON.stringify({ api_key: '' }) });
+      setText('#openaiStatus', 'Desativada');
+      showToast('Chave esquecida pelo servidor.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  $('#changePasswordButton').addEventListener('click', () => {
+    $('#passwordDialog').classList.remove('password-required');
+    $('#passwordDialog .optional-close').hidden = false;
+    $('#passwordDialog').showModal();
+  });
+
+  $('#passwordForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    $('#passwordError').textContent = '';
+    if (values.new_password !== values.confirm_password) {
+      $('#passwordError').textContent = 'A confirmação não corresponde à nova senha.';
+      return;
+    }
+    try {
+      await apiRequest('/api/admin/password', { method: 'PUT', body: JSON.stringify(values) });
+      if (currentTeacher) currentTeacher.must_reset_password = false;
+      $('#passwordDialog').classList.remove('password-required');
+      $('#passwordDialog').close();
+      form.reset();
+      showToast('Senha da professora atualizada.');
+    } catch (error) { $('#passwordError').textContent = error.message; }
+  });
+
+  $('#copySecretButton').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('#secretRevealValue').textContent);
+      showToast('Copiado para a área de transferência.');
+    } catch (error) { showToast('Selecione e copie o valor exibido.'); }
+  });
 
   $('#adminLoginForm').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -426,6 +705,7 @@
         body: JSON.stringify({ username: values.username, password: values.password })
       });
       sessionStorage.setItem(adminTokenKey, result.token);
+      currentTeacher = result.teacher || null;
       $('#adminLoginDialog').close();
       formElement.elements.password.value = '';
       await loadRemoteAdmin();
@@ -441,6 +721,7 @@
   $('#adminLogoutButton').addEventListener('click', () => {
     sessionStorage.removeItem(adminTokenKey);
     remoteCourse = null;
+    currentTeacher = null;
     openAdminLogin();
     showToast('Sessão docente encerrada.');
   });
@@ -495,9 +776,18 @@
   });
 
   $('#addClassButton').addEventListener('click', () => openClassDialog());
+  $('#classForm').elements.session_date.addEventListener('change', (event) => {
+    const form = event.currentTarget.form;
+    if (!event.currentTarget.value || form.elements.submission_deadline.value) return;
+    const date = new Date(`${event.currentTarget.value}T${form.elements.start_time.value || '14:00'}:00`);
+    date.setDate(date.getDate() - 1);
+    const pad = (value) => String(value).padStart(2, '0');
+    form.elements.submission_deadline.value = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  });
   $('#classForm').addEventListener('submit', async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    values.student_choice_enabled = event.currentTarget.elements.student_choice_enabled.checked;
     const sessionId = Number(values.session_id || 0);
     delete values.session_id;
     try {
@@ -509,9 +799,65 @@
       const updated = remoteCourse.sessions.find((item) => item.id === editingSessionId);
       event.currentTarget.elements.session_id.value = editingSessionId;
       $('#articleManager').hidden = false;
+      $('#specialistInviteManager').hidden = false;
+      $('#adminRoomManager').hidden = false;
       renderManagedArticles(updated);
       renderPresenterChecks();
+      await loadAdminRoom(editingSessionId);
       showToast(sessionId ? 'Aula atualizada. O destaque dos alunos foi recalculado.' : 'Aula criada. Agora vincule os artigos e apresentadores.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  $('#generateSpecialistInvite').addEventListener('click', async () => {
+    if (!editingSessionId) return;
+    const form = $('#classForm');
+    const name = form.elements.specialist_name.value.trim();
+    if (!name) { showToast('Informe e salve o nome do especialista primeiro.'); return; }
+    try {
+      const result = await apiRequest(`/api/admin/sessions/${editingSessionId}/specialist-invite`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name, role: form.elements.specialist_role.value.trim(),
+          email: form.elements.specialist_email.value.trim(),
+          linkedin: form.elements.specialist_linkedin.value.trim(),
+          whatsapp: form.elements.specialist_whatsapp.value.trim(),
+          website: form.elements.specialist_website.value.trim(),
+          duration_hours: Number($('#specialistInviteDuration').value)
+        })
+      });
+      revealSecret({
+        eyebrow: 'Convite temporário', title: `Acesso de ${name}`,
+        copy: `Válido até ${new Date(result.expires_at).toLocaleString('pt-BR')}. Gerar outro convite invalida o anterior.`,
+        value: result.invite_url
+      });
+      await loadRemoteAdmin();
+    } catch (error) { showToast(error.message); }
+  });
+
+  $('#adminRoomResourceForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    values.visibility = event.currentTarget.elements.public.checked ? 'public' : 'class';
+    try {
+      await apiRequest(`/api/sessions/${editingSessionId}/resources`, { method: 'POST', body: JSON.stringify(values) });
+      event.currentTarget.reset();
+      await loadAdminRoom();
+      showToast('Material adicionado à sala da aula.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  $$('[data-admin-rich]').forEach((button) => button.addEventListener('click', () => {
+    $('#adminRoomCommentEditor').focus();
+    document.execCommand(button.dataset.adminRich, false);
+  }));
+  $('#adminRoomCommentForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const editor = $('#adminRoomCommentEditor');
+    if (!editor.textContent.trim()) { showToast('Escreva uma mensagem antes de publicar.'); return; }
+    try {
+      await apiRequest(`/api/sessions/${editingSessionId}/comments`, { method: 'POST', body: JSON.stringify({ content_html: editor.innerHTML }) });
+      editor.innerHTML = '';
+      await loadAdminRoom();
     } catch (error) { showToast(error.message); }
   });
 
@@ -542,11 +888,15 @@
     const values = Object.fromEntries(new FormData(event.currentTarget).entries());
     if (remoteCourse) {
       try {
-        await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/students`, {
+        const result = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/students`, {
           method: 'POST', body: JSON.stringify({ name: values.name, email: values.email, nusp: values.nusp, group_name: '—' })
         });
         event.currentTarget.reset();
-        showToast(`${values.name} recebeu acesso a ${course.code}.`);
+        revealSecret({
+          eyebrow: 'Novo aluno', title: `Token de ${values.name}`,
+          copy: 'Copie e envie ao aluno. A recuperação por e-mail será conectada ao Resend futuramente.',
+          value: result.access_token
+        });
         await loadRemoteAdmin();
       } catch (error) { showToast(error.message); }
       return;
@@ -575,6 +925,55 @@
     } catch (error) { showToast(error.message); }
   });
 
+  $('#assessmentForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/assessments`, {
+        method: 'POST', body: JSON.stringify(values)
+      });
+      event.currentTarget.reset();
+      event.currentTarget.elements.max_score.value = '10';
+      event.currentTarget.elements.weight.value = '25';
+      await loadRemoteAdmin();
+      showToast('Avaliação criada e adicionada ao diário da turma.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  $('#gradeScaleForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const gradeScale = [
+      { letter: 'A', min: Number(values.A) },
+      { letter: 'B', min: Number(values.B) },
+      { letter: 'C', min: Number(values.C) },
+      { letter: 'R', min: 0 }
+    ];
+    if (!(gradeScale[0].min > gradeScale[1].min && gradeScale[1].min > gradeScale[2].min && gradeScale[2].min > 0)) {
+      showToast('Use faixas decrescentes: A maior que B, B maior que C e C maior que zero.');
+      return;
+    }
+    try {
+      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`, {
+        method: 'PUT', body: JSON.stringify({ gradeScale })
+      });
+      await loadRemoteAdmin();
+      showToast('Faixas dos emblemas A, B, C e R atualizadas.');
+    } catch (error) { showToast(error.message); }
+  });
+
+  $('#publishGradeResults').addEventListener('click', async () => {
+    const publish = !Boolean(remoteCourse?.grade_results_published);
+    if (publish && !window.confirm('Publicar agora os conceitos finais para os alunos?')) return;
+    try {
+      await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}`, {
+        method: 'PUT', body: JSON.stringify({ gradeResultsPublished: publish })
+      });
+      await loadRemoteAdmin();
+      showToast(publish ? 'Resultados publicados. Os emblemas já aparecem para os alunos.' : 'Resultados recolhidos para rascunho.');
+    } catch (error) { showToast(error.message); }
+  });
+
   $('#importStudentsButton').addEventListener('click', () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -584,6 +983,7 @@
       if (!file) return;
       const rows = (await file.text()).split(/\r?\n/).filter(Boolean);
       const candidates = [];
+      const generatedTokens = [];
       let imported = 0;
       rows.forEach((row, index) => {
         if (index === 0 && /nome|email|usp/i.test(row)) return;
@@ -596,9 +996,10 @@
       if (remoteCourse) {
         for (const candidate of candidates) {
           try {
-            await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/students`, {
+            const result = await apiRequest(`/api/admin/courses/${encodeURIComponent(course.code)}/students`, {
               method: 'POST', body: JSON.stringify({ ...candidate, group_name: candidate.group })
             });
+            generatedTokens.push(`${candidate.name};${candidate.email};${result.access_token}`);
             imported += 1;
           } catch (error) {
             if (error.status !== 409) console.warn('Falha ao importar aluno.', error);
@@ -615,6 +1016,11 @@
       if (imported) {
         if (!remoteCourse) saveState();
         showToast(`${imported} aluno${imported === 1 ? '' : 's'} importado${imported === 1 ? '' : 's'} do CSV.`);
+        if (generatedTokens.length) revealSecret({
+          eyebrow: 'Tokens da importação', title: 'Copie a lista agora.',
+          copy: 'Formato: nome; e-mail; token. Os tokens não serão exibidos novamente.',
+          value: generatedTokens.join('\n')
+        });
         renderStudents();
         renderMetrics();
       } else {
@@ -661,7 +1067,7 @@
       workload: '60 h',
       classDay: 'A definir',
       room: 'A definir',
-      professor: 'Profa. Dra. Lídia Rebello Dias',
+      professor: 'Profa. Maria Lídia',
       updatedAt: 'Agora',
       cover: 'assets/course-pea5004.webp',
       accent: '#56d6ca',
@@ -713,6 +1119,9 @@
   });
 
   $$('[data-close]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.close}`).close()));
+  $('#passwordDialog').addEventListener('cancel', (event) => {
+    if ($('#passwordDialog').classList.contains('password-required')) event.preventDefault();
+  });
 
   $('#resetButton').addEventListener('click', async () => {
     if (!window.confirm('Recarregar o conteúdo editorial inicial? A agenda, os alunos e os materiais do SQLite serão preservados.')) return;
@@ -724,14 +1133,10 @@
     showToast('Conteúdo editorial recarregado. Os dados do SQLite foram preservados.');
   });
 
-  const navLinks = $$('.admin-nav a');
-  const sections = navLinks.map((link) => document.querySelector(link.getAttribute('href'))).filter(Boolean);
-  const observer = new IntersectionObserver((entries) => {
-    const visible = entries.find((entry) => entry.isIntersecting);
-    if (!visible) return;
-    navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${visible.target.id}`));
-  }, { rootMargin: '-20% 0px -70%', threshold: 0 });
-  sections.forEach((section) => observer.observe(section));
+  $$('[data-admin-route]').forEach((link) => link.addEventListener('click', (event) => {
+    event.preventDefault();
+    setAdminView(link.dataset.adminRoute);
+  }));
 
   async function bootstrap() {
     try {
@@ -757,6 +1162,7 @@
       console.warn('Catálogo SQLite indisponível.', error);
     }
     renderAll();
+    setAdminView(window.location.hash.slice(1) || 'visao');
     await loadRemoteAdmin();
   }
 

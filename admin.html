@@ -22,18 +22,16 @@
         <span>Rota<br>da disciplina</span>
       </a>
       <div class="admin-profile">
-        <span class="admin-avatar">LR</span>
-        <div><strong>Profa. Lídia Rebello Dias</strong><small>Administradora · PEA/EPUSP</small></div>
+        <span class="admin-avatar" id="teacherInitials">ML</span>
+        <div><strong id="teacherName">Profa. Maria Lídia</strong><small>Administradora · PEA/EPUSP</small></div>
       </div>
       <nav class="admin-nav" aria-label="Seções do painel">
-        <a class="active" href="#visao"><span aria-hidden="true">◈</span>Visão geral</a>
-        <a href="#informacoes"><span aria-hidden="true">≡</span>Informações</a>
-        <a href="#drive"><span aria-hidden="true">↻</span>Google Drive</a>
-        <a href="#agenda"><span aria-hidden="true">◷</span>Agenda das aulas</a>
-        <a href="#etapas"><span aria-hidden="true">∿</span>Trilha de conteúdos</a>
-        <a href="#alunos"><span aria-hidden="true">◎</span>Alunos e acesso</a>
-        <a href="#entregas"><span aria-hidden="true">↗</span>Apresentações</a>
-        <a href="#materiais-enviados"><span aria-hidden="true">⇧</span>Materiais enviados</a>
+        <a class="active" href="#visao" data-admin-route="visao"><span aria-hidden="true">◈</span>Visão geral</a>
+        <a href="#disciplinas" data-admin-route="disciplinas"><span aria-hidden="true">≡</span>Disciplinas</a>
+        <a href="#aulas" data-admin-route="aulas"><span aria-hidden="true">◷</span>Aulas e artigos</a>
+        <a href="#pessoas" data-admin-route="pessoas"><span aria-hidden="true">◎</span>Pessoas e acessos</a>
+        <a href="#conteudo" data-admin-route="conteudo"><span aria-hidden="true">⇧</span>Avaliações e entregas</a>
+        <a href="#configuracoes" data-admin-route="configuracoes"><span aria-hidden="true">⌁</span>Configurações</a>
       </nav>
       <div class="sidebar-foot"><a href="index.html" id="studentViewLink">Abrir área do aluno ↗</a></div>
     </aside>
@@ -49,17 +47,17 @@
       </header>
 
       <div class="admin-content">
-        <section class="admin-welcome" id="visao">
+        <section class="admin-welcome" id="visao" data-admin-view="visao">
           <div><span class="eyebrow">Gestão das disciplinas</span><h1>Bom trabalho, professora.</h1></div>
           <p>Edite a rota, conecte a pasta do Drive e controle quem pode acessar. As mudanças salvas aparecem na área do aluno deste protótipo.</p>
         </section>
 
-        <section aria-label="Disciplinas cadastradas">
+        <section aria-label="Disciplinas cadastradas" data-admin-view="visao disciplinas aulas pessoas conteudo configuracoes">
           <div class="course-tabs" id="courseTabs"></div>
           <button class="admin-button" id="newCourseButton">+ Cadastrar nova disciplina</button>
         </section>
 
-        <section class="metric-grid" id="metricGrid" aria-label="Indicadores da disciplina">
+        <section class="metric-grid" id="metricGrid" aria-label="Indicadores da disciplina" data-admin-view="visao">
           <article class="metric"><small>Alunos com acesso</small><strong id="studentMetric">0</strong><span id="studentMetricDetail">lista atual</span></article>
           <article class="metric"><small>Aulas agendadas</small><strong id="moduleMetric">0</strong><span id="moduleMetricDetail">próxima aula</span></article>
           <article class="metric"><small>Itens no Drive</small><strong id="driveMetric">0</strong><span id="driveMetricDetail">sincronizados</span></article>
@@ -68,11 +66,16 @@
 
         <div class="admin-grid">
           <div>
-            <section class="admin-panel" id="informacoes">
-              <header class="panel-heading"><div><h2>Informações da disciplina</h2><p>Título, ementa e apresentação que o aluno vê.</p></div><span class="eyebrow" id="courseStatusLabel">Publicada</span></header>
+            <section class="admin-panel" id="informacoes" data-admin-view="disciplinas">
+              <header class="panel-heading"><div><h2>Informações da disciplina</h2><p>Título, ementa e apresentação que o aluno vê.</p></div><div class="panel-heading-actions"><button class="admin-button ai-button" id="aiCourseButton" type="button">✦ Preencher com IA</button><span class="eyebrow" id="courseStatusLabel">Publicada</span></div></header>
               <div class="panel-body">
                 <div class="course-cover-editor" id="courseCoverEditor">
                   <div class="cover-editor-copy"><small id="coverCode">PEA5004</small><strong id="coverTitle">Monitoramento e segurança portuária</strong></div>
+                </div>
+                <div class="cover-source-row">
+                  <label class="admin-field">Enviar nova capa<input id="coverFileInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+                  <button class="admin-button" id="uploadCoverButton" type="button">Enviar imagem</button>
+                  <small>JPG, PNG, WebP ou GIF · até 8 MB. O link abaixo continua disponível como alternativa.</small>
                 </div>
                 <form class="editor-grid" id="courseForm">
                   <label class="admin-field">Código<input name="code" required maxlength="12" readonly></label>
@@ -90,21 +93,21 @@
               </div>
             </section>
 
-            <section class="admin-panel" id="agenda">
+            <section class="admin-panel" id="agenda" data-admin-view="aulas">
               <header class="panel-heading"><div><h2>Agenda das aulas</h2><p>Data, pauta, especialista e o segundo momento com os artigos dos alunos.</p></div><button class="admin-button" id="addClassButton">+ Nova aula</button></header>
               <div class="admin-list class-admin-list" id="classAdminList"></div>
             </section>
 
-            <section class="admin-panel" id="etapas">
+            <section class="admin-panel" id="etapas" data-admin-view="aulas">
               <header class="panel-heading"><div><h2>Trilha de conteúdos</h2><p>Organize a sequência conceitual que acompanha a agenda do semestre.</p></div><button class="admin-button" id="addModuleButton">+ Nova etapa</button></header>
               <div class="admin-list" id="moduleAdminList"></div>
             </section>
 
-            <section class="admin-panel" id="alunos">
-              <header class="panel-heading"><div><h2>Alunos e acesso</h2><p>Somente combinações cadastradas de e-mail e Nº USP podem entrar.</p></div><button class="admin-button" id="importStudentsButton">Importar planilha</button></header>
+            <section class="admin-panel" id="alunos" data-admin-view="pessoas">
+              <header class="panel-heading"><div><h2>Alunos e tokens</h2><p>Cada aluno recebe um token individual. Se for perdido, gere outro; o anterior deixa de funcionar.</p></div><button class="admin-button" id="importStudentsButton">Importar planilha</button></header>
               <div class="panel-body" style="padding:0;overflow-x:auto">
                 <table class="student-table">
-                  <thead><tr><th>Aluno</th><th>E-mail</th><th>Nº USP</th><th>Grupo</th><th>Acesso</th><th></th></tr></thead>
+                  <thead><tr><th>Aluno</th><th>E-mail</th><th>Nº USP</th><th>Token</th><th>Acesso</th><th></th></tr></thead>
                   <tbody id="studentRows"></tbody>
                 </table>
               </div>
@@ -116,17 +119,39 @@
               </form>
             </section>
 
-            <section class="admin-panel" id="entregas">
+            <section class="admin-panel assessment-panel" id="avaliacoes" data-admin-view="conteudo">
+              <header class="panel-heading"><div><h2>Avaliações e notas</h2><p>Defina pesos, atribua notas e acompanhe o conceito final de cada aluno.</p></div><div class="panel-heading-actions"><span class="eyebrow" id="assessmentWeightLabel">0% configurado</span><button class="admin-button grade-publish-button" id="publishGradeResults" type="button">Publicar resultados</button></div></header>
+              <div class="panel-body assessment-config">
+                <form id="gradeScaleForm" class="grade-scale-form">
+                  <div><span class="eyebrow">Conversão do resultado final</span><strong>Emblemas A · B · C · R</strong><small>Informe a nota mínima, em uma escala final de 0 a 10.</small></div>
+                  <label>A ≥<input name="A" type="number" min="0" max="10" step="0.1" value="8.5" required></label>
+                  <label>B ≥<input name="B" type="number" min="0" max="10" step="0.1" value="7" required></label>
+                  <label>C ≥<input name="C" type="number" min="0" max="10" step="0.1" value="5" required></label>
+                  <button class="admin-button" type="submit">Salvar faixas</button>
+                </form>
+                <form id="assessmentForm" class="assessment-create-form">
+                  <label class="admin-field assessment-name">Nova avaliação<input name="name" placeholder="Ex.: Resenha do artigo" maxlength="120" required></label>
+                  <label class="admin-field">Tipo<select name="kind"><option value="review">Resenha</option><option value="presentation">Apresentação</option><option value="participation">Participação e perguntas</option><option value="article">Artigo</option><option value="final_work">Trabalho final</option><option value="other">Outra</option></select></label>
+                  <label class="admin-field">Nota máxima<input name="max_score" type="number" min="0.1" max="1000" step="0.1" value="10" required></label>
+                  <label class="admin-field">Peso (%)<input name="weight" type="number" min="0" max="100" step="0.1" value="25" required></label>
+                  <label class="admin-field">Prazo<input name="due_at" type="datetime-local"></label>
+                  <button class="admin-button primary" type="submit">Criar avaliação</button>
+                </form>
+              </div>
+              <div class="assessment-list" id="assessmentList"></div>
+            </section>
+
+            <section class="admin-panel" id="entregas" data-admin-view="conteudo">
               <header class="panel-heading"><div><h2>Apresentações reservadas</h2><p>Grupos cadastrados pelos alunos na área da disciplina.</p></div></header>
               <div class="admin-list" id="submissionList"></div>
             </section>
 
-            <section class="admin-panel" id="materiais-enviados">
+            <section class="admin-panel" id="materiais-enviados" data-admin-view="conteudo">
               <header class="panel-heading"><div><h2>Materiais enviados</h2><p>Arquivos entregues pelos alunos, vinculados à aula e ao artigo.</p></div><span class="eyebrow" id="uploadCountLabel">0 arquivos</span></header>
               <div class="admin-list" id="uploadAdminList"></div>
             </section>
 
-            <section class="admin-panel" id="tipos-entrega">
+            <section class="admin-panel" id="tipos-entrega" data-admin-view="conteudo">
               <header class="panel-heading"><div><h2>Tipos de entrega</h2><p>Defina as categorias que os alunos poderão selecionar ao enviar materiais.</p></div><span class="eyebrow">Configuração clonável</span></header>
               <div class="deliverable-type-list" id="deliverableTypeList"></div>
               <form class="deliverable-type-form" id="deliverableTypeForm">
@@ -137,7 +162,7 @@
           </div>
 
           <aside>
-            <section class="admin-panel drive-card" id="drive">
+            <section class="admin-panel drive-card" id="drive" data-admin-view="conteudo">
               <header class="panel-heading"><div><h2>Google Drive</h2><p>Fonte dos materiais da disciplina.</p></div><span class="eyebrow" id="driveStatusLabel">Conectado</span></header>
               <div class="panel-body">
                 <div class="drive-state">
@@ -150,7 +175,7 @@
               </div>
             </section>
 
-            <section class="admin-panel">
+            <section class="admin-panel" data-admin-view="configuracoes">
               <header class="panel-heading"><div><h2>Publicação</h2><p>Estado da experiência do aluno.</p></div></header>
               <div class="panel-body">
                 <div class="drive-state" style="border-color:var(--line)">
@@ -161,12 +186,38 @@
               </div>
             </section>
 
-            <section class="admin-panel">
+            <section class="admin-panel" data-admin-view="configuracoes">
               <header class="panel-heading"><div><h2>Persistência</h2><p>Agenda, turma e arquivos salvos no SQLite.</p></div></header>
               <div class="panel-body">
                 <p style="margin:0 0 15px;color:#71898f;font-size:11px">O conteúdo editorial da trilha também possui uma cópia local de apoio. Esta ação não apaga aulas, alunos ou materiais do banco.</p>
                 <button class="admin-button" id="resetButton" style="width:100%">Recarregar conteúdo editorial</button>
               </div>
+            </section>
+
+            <section class="admin-panel" data-admin-view="configuracoes" id="privacyPanel">
+              <header class="panel-heading"><div><h2>O que é público?</h2><p>Escolha camada por camada. Meet, envios e dados dos alunos permanecem privados.</p></div><span class="eyebrow">Privacidade</span></header>
+              <div class="panel-body privacy-switches">
+                <label><input type="checkbox" id="publicOverview"><span><strong>Apresentação e ementa</strong><small>Visitantes conhecem a disciplina.</small></span></label>
+                <label><input type="checkbox" id="publicSchedule"><span><strong>Agenda das aulas</strong><small>Datas, temas e convidado.</small></span></label>
+                <label><input type="checkbox" id="publicArticles"><span><strong>Artigos da disciplina</strong><small>Títulos e disponibilidade de escolha.</small></span></label>
+                <label><input type="checkbox" id="publicResources"><span><strong>Materiais marcados como públicos</strong><small>Links publicados na sala da aula.</small></span></label>
+                <label><input type="checkbox" id="publicChat"><span><strong>Leitura do mural</strong><small>Visitantes leem; somente pessoas autenticadas escrevem.</small></span></label>
+              </div>
+            </section>
+
+            <section class="admin-panel" data-admin-view="configuracoes" id="openaiPanel">
+              <header class="panel-heading"><div><h2>Assistente OpenAI</h2><p>Use a IA para rascunhar ementas e pautas. A chave fica apenas na memória do servidor.</p></div><span class="eyebrow" id="openaiStatus">Desativada</span></header>
+              <form class="panel-body openai-key-form" id="openaiKeyForm">
+                <label class="admin-field">Chave da API<input name="api_key" type="password" autocomplete="off" placeholder="sk-..."></label>
+                <button class="admin-button primary" type="submit">Ativar nesta sessão do servidor</button>
+                <button class="admin-button" type="button" id="clearOpenaiKey">Desativar IA</button>
+                <small>A chave não aparece novamente e será esquecida quando o servidor reiniciar.</small>
+              </form>
+            </section>
+
+            <section class="admin-panel" data-admin-view="configuracoes" id="accountPanel">
+              <header class="panel-heading"><div><h2>Conta da professora</h2><p>Maria Lídia está cadastrada no SQLite. Troque a senha provisória no primeiro acesso.</p></div><span class="eyebrow">SQLite</span></header>
+              <div class="panel-body"><button class="admin-button" id="changePasswordButton" type="button">Alterar minha senha</button></div>
             </section>
           </aside>
         </div>
@@ -222,15 +273,42 @@
           <input name="meet_url" type="url" inputmode="url" placeholder="https://meet.google.com/abc-defg-hij">
           <small>O endereço só será revelado aos alunos cadastrados depois do login.</small>
         </label>
+        <div class="choice-policy-box">
+          <label class="choice-toggle"><input name="student_choice_enabled" type="checkbox"><span><strong>Permitir que os alunos escolham os artigos</strong><small>A primeira escolha confirmada bloqueia o artigo. Somente a professora poderá liberar ou trocar.</small></span></label>
+          <label>Bloquear escolhas e envios em<input name="submission_deadline" type="datetime-local"><small>Defina normalmente até um dia antes da apresentação.</small></label>
+        </div>
+        <button class="admin-button ai-button" id="aiClassButton" type="button">✦ Sugerir pauta com IA</button>
         <div class="class-moment-label"><span>1º momento</span><strong>Profissional convidado</strong></div>
         <div class="form-columns"><label>Nome do especialista<input name="specialist_name"></label><label>Cargo / instituição<input name="specialist_role"></label></div>
         <label>Temática da apresentação<textarea name="specialist_topic" rows="2"></textarea></label>
+        <div class="specialist-contact-grid">
+          <label>E-mail do especialista<input name="specialist_email" type="email"></label>
+          <label>LinkedIn<input name="specialist_linkedin" type="url" placeholder="https://linkedin.com/in/..."></label>
+          <label>WhatsApp<input name="specialist_whatsapp" placeholder="+55 11 ..."></label>
+          <label>Site<input name="specialist_website" type="url" placeholder="https://..."></label>
+        </div>
         <label>Observações<textarea name="notes" rows="2"></textarea></label>
         <div class="dialog-actions"><button class="text-button" type="button" data-close="classDialog">Cancelar</button><button class="primary-button" type="submit">Salvar aula</button></div>
       </form>
 
+      <section class="specialist-invite-manager" id="specialistInviteManager" hidden>
+        <div><span class="eyebrow">Acesso temporário</span><h3>Área do especialista</h3><p>O convite libera apenas esta aula, o Meet, contatos, slides, materiais e o mural.</p></div>
+        <label>Validade do convite<select id="specialistInviteDuration"><option value="24">24 horas</option><option value="48" selected>48 horas</option><option value="72">3 dias</option><option value="168">7 dias</option></select></label>
+        <button class="admin-button" id="generateSpecialistInvite" type="button">Gerar novo convite</button>
+      </section>
+
+      <section class="admin-room-manager" id="adminRoomManager" hidden>
+        <header><div><span class="eyebrow">Sala da aula</span><h3>Materiais e mural</h3><p>O que for marcado como público ainda respeita a política geral da disciplina.</p></div></header>
+        <div class="admin-room-grid">
+          <div><div class="room-column-head"><h4>Materiais</h4><span id="adminRoomResourceCount">0 itens</span></div><div id="adminRoomResourceList"></div>
+            <form id="adminRoomResourceForm" class="room-resource-form"><div class="form-columns"><label>Título<input name="title" required></label><label>Tipo<select name="resource_type"><option value="material">Material</option><option value="slide">Slides</option><option value="link">Link</option></select></label></div><label>Link<input name="url" type="url" placeholder="https://..."></label><label>Descrição<textarea name="content_html" rows="2"></textarea></label><label class="choice-toggle"><input name="public" type="checkbox"><span><strong>Item público</strong><small>Visível sem login somente se materiais públicos estiverem liberados.</small></span></label><button class="admin-button" type="submit">Adicionar material</button></form>
+          </div>
+          <div><div class="room-column-head"><h4>Mural</h4><span>Conversa da aula</span></div><div class="room-comment-list" id="adminRoomCommentList"></div><form id="adminRoomCommentForm" class="rich-comment-form"><div class="rich-toolbar"><button type="button" data-admin-rich="bold"><strong>B</strong></button><button type="button" data-admin-rich="italic"><em>I</em></button><button type="button" data-admin-rich="insertUnorderedList">• Lista</button></div><div class="rich-editor" id="adminRoomCommentEditor" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="Orientação, link ou comentário da professora…"></div><button class="admin-button primary" type="submit">Publicar</button></form></div>
+        </div>
+      </section>
+
       <section class="article-manager" id="articleManager" hidden>
-        <header><div class="class-moment-label"><span>2º momento</span><strong>Artigos apresentados pelos alunos</strong></div><p>Vincule cada leitura aos alunos que farão a apresentação.</p></header>
+        <header><div class="class-moment-label"><span>2º momento</span><strong>Artigos apresentados pelos alunos</strong></div><p>Cadastre todas as leituras. Quando a escolha estiver aberta, os próprios alunos reservam uma delas; a primeira confirmação bloqueia o artigo.</p></header>
         <div class="managed-article-list" id="managedArticleList"></div>
         <form id="articleForm" class="article-form">
           <div class="form-columns"><label>Código<input name="code" placeholder="A01"></label><label>Autoria<input name="author" placeholder="Sobrenome et al."></label></div>
@@ -250,12 +328,37 @@
       <span class="eyebrow">Acesso da professora</span>
       <h2>Assuma o controle.</h2>
       <p>Entre para gerenciar disciplinas, alunos, aulas, avaliações e materiais. O navegador não exibirá mais a janela nativa de autenticação.</p>
-      <label>Usuário<input name="username" autocomplete="username" value="professora" required></label>
+      <label>Usuário<input name="username" autocomplete="username" value="maria.lidia" required></label>
       <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
       <div class="token-contract"><span><small>Validade</small><strong>12 horas</strong></span><span><small>Área</small><strong>Painel docente</strong></span><span><small>Proteção</small><strong>Token administrativo</strong></span></div>
       <p class="form-error" id="adminLoginError" role="alert"></p>
       <button class="primary-button access-submit" type="submit"><span>Entrar no painel</span><b aria-hidden="true">→</b></button>
     </form>
+  </dialog>
+
+  <dialog class="app-dialog access-dialog" id="passwordDialog">
+    <form class="dialog-card access-card" id="passwordForm">
+      <button class="dialog-close optional-close" type="button" data-close="passwordDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow">Conta da professora</span>
+      <h2>Crie sua senha definitiva.</h2>
+      <p id="passwordDialogCopy">A senha inicial é provisória. A nova senha deve ter pelo menos 10 caracteres, com letras e números.</p>
+      <label>Senha atual<input name="current_password" type="password" autocomplete="current-password" required></label>
+      <label>Nova senha<input name="new_password" type="password" autocomplete="new-password" minlength="10" required></label>
+      <label>Repita a nova senha<input name="confirm_password" type="password" autocomplete="new-password" minlength="10" required></label>
+      <p class="form-error" id="passwordError" role="alert"></p>
+      <button class="primary-button access-submit" type="submit"><span>Salvar nova senha</span><b aria-hidden="true">→</b></button>
+    </form>
+  </dialog>
+
+  <dialog class="app-dialog" id="secretRevealDialog">
+    <div class="dialog-card secret-reveal-card">
+      <button class="dialog-close" type="button" data-close="secretRevealDialog" aria-label="Fechar">×</button>
+      <span class="eyebrow" id="secretRevealEyebrow">Token criado</span>
+      <h2 id="secretRevealTitle">Copie agora.</h2>
+      <p id="secretRevealCopy">Este segredo só será exibido uma vez.</p>
+      <code id="secretRevealValue"></code>
+      <div class="dialog-actions"><button class="admin-button" id="copySecretButton" type="button">Copiar</button><button class="primary-button" type="button" data-close="secretRevealDialog">Concluído</button></div>
+    </div>
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>

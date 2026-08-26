@@ -7,6 +7,7 @@
   let course = window.CourseStore.getCourse(state, requestedCode);
   let remoteCourse = null;
   let currentStudent = null;
+  let activeRoomSessionId = null;
   let toastTimer;
 
   const $ = (selector, root = document) => root.querySelector(selector);
@@ -99,12 +100,14 @@
     const articles = next.articles || [];
     $('#nextArticleList').innerHTML = articles.length ? articles.map((article) => {
       const presenters = (article.presenters || []).map((presenter) => presenter.name).join(', ');
+      const stateLabel = article.chosen_by_me ? 'Sua escolha' : article.available_for_choice ? 'Disponível' : `Escolhido por ${article.reservation?.student_name || presenters || 'outro aluno'}`;
       return `<article class="next-article">
         <span>${esc(article.code || 'ART')}</span>
-        <div><strong>${esc(article.title)}</strong><small>${esc(article.author || 'Autoria a confirmar')}</small><small class="presenter-line">${presenters ? `Apresentação: ${esc(presenters)}` : 'Apresentadores a definir'}</small></div>
+        <div><strong>${esc(article.title)}</strong><small>${esc(article.author || 'Autoria a confirmar')}</small><small class="presenter-line ${article.chosen_by_me ? 'mine' : ''}">${esc(stateLabel)}</small></div>
       </article>`;
     }).join('') : '<p class="next-article-empty">Os artigos e apresentadores desta aula ainda serão cadastrados.</p>';
     renderMeetingGate();
+    if (!activeRoomSessionId) activeRoomSessionId = next.id;
   }
 
   function renderMeetingGate() {
@@ -160,11 +163,12 @@
   function renderUploadOptions() {
     const sessions = remoteCourse?.sessions || [];
     const select = $('#uploadSessionSelect');
-    select.innerHTML = sessions.map((session) => `<option value="${session.id}" ${session.id === remoteCourse?.next_class?.id ? 'selected' : ''}>${esc(formatDatePart(session.session_date, { day: '2-digit', month: 'short' }))} · ${esc(session.title)}</option>`).join('');
+    select.innerHTML = sessions.map((session) => `<option value="${session.id}" ${session.id === remoteCourse?.next_class?.id ? 'selected' : ''} ${session.submission_open === false ? 'disabled' : ''}>${esc(formatDatePart(session.session_date, { day: '2-digit', month: 'short' }))} · ${esc(session.title)}${session.submission_open === false ? ' · prazo encerrado' : ''}</option>`).join('');
     const syncArticles = () => {
       const selected = sessions.find((session) => session.id === Number(select.value));
       const articleSelect = $('#uploadArticleSelect');
-      articleSelect.innerHTML = '<option value="">Material geral da aula</option>' + (selected?.articles || []).map((article) => `<option value="${article.id}">${esc(article.code || 'Artigo')} · ${esc(article.title)}</option>`).join('');
+      const ownArticles = (selected?.articles || []).filter((article) => article.chosen_by_me);
+      articleSelect.innerHTML = '<option value="">Material geral da aula</option>' + ownArticles.map((article) => `<option value="${article.id}">${esc(article.code || 'Artigo')} · ${esc(article.title)} · sua escolha</option>`).join('');
     };
     select.onchange = syncArticles;
     syncArticles();
@@ -175,17 +179,141 @@
       : '<option value="">Nenhum tipo de entrega cadastrado</option>';
   }
 
+  function formatDeadline(value) {
+    if (!value) return 'Prazo ainda não definido';
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  }
+
+  function renderAssignments() {
+    const panel = $('#studentAssignmentPanel');
+    const assignments = remoteCourse?.my_assignments || [];
+    if (!isAuthenticated()) {
+      panel.innerHTML = '<p>Entre com seu token para consultar sua escolha e as entregas obrigatórias.</p>';
+      return;
+    }
+    if (!assignments.length) {
+      panel.innerHTML = '<div class="assignment-empty"><strong>Nenhum artigo escolhido.</strong><span>Abra “Escolher meu artigo” quando a professora liberar as reservas.</span></div>';
+      return;
+    }
+    panel.innerHTML = assignments.map((assignment) => {
+      const uploaded = new Set((assignment.uploads || []).map((item) => item.deliverable_type));
+      return `<article class="assignment-card">
+        <span class="assignment-code">${esc(assignment.article_code || 'ART')}</span>
+        <div><small>Sua escolha · ${esc(assignment.session_title)}</small><strong>${esc(assignment.article_title)}</strong>
+          <p>Enviar até <b>${esc(formatDeadline(assignment.submission_deadline))}</b></p>
+          <div class="required-deliverables">${(assignment.required_deliverables || []).map((name) => `<span class="${uploaded.has(name) ? 'done' : ''}">${uploaded.has(name) ? '✓' : '○'} ${esc(name)}</span>`).join('')}</div>
+        </div>
+        <button class="secondary-button" data-assignment-upload="${assignment.session_id}" data-assignment-article="${assignment.article_id}">Enviar arquivos</button>
+      </article>`;
+    }).join('');
+    $$('[data-assignment-upload]').forEach((button) => button.addEventListener('click', () => {
+      runProtectedAction('upload');
+      setTimeout(() => {
+        $('#uploadSessionSelect').value = button.dataset.assignmentUpload;
+        $('#uploadSessionSelect').dispatchEvent(new Event('change'));
+        $('#uploadArticleSelect').value = button.dataset.assignmentArticle;
+      }, 0);
+    }));
+  }
+
+  function renderGrades() {
+    const authenticated = Boolean(isAuthenticated() && remoteCourse?.access?.authenticated);
+    $('#gradesLocked').hidden = authenticated;
+    $('#gradesDashboard').hidden = !authenticated;
+    if (!authenticated) return;
+    const grades = remoteCourse?.grades || [];
+    const summary = remoteCourse?.grade_summary || {};
+    const total = Number(summary.total_count || 0);
+    const graded = Number(summary.graded_count || 0);
+    const progress = total ? Math.round((graded / total) * 100) : 0;
+    const gradeKindLabels = { review: 'Resenha', presentation: 'Apresentação', participation: 'Participação', article: 'Artigo', final_work: 'Trabalho final', other: 'Avaliação' };
+    const concept = summary.concept || '…';
+    setText('#finalConcept', concept);
+    $('#finalConcept').className = `final-concept ${summary.concept ? `grade-${String(summary.concept).toLowerCase()}` : 'pending'}`;
+    setText('#finalScore', summary.score == null ? 'Sem notas lançadas' : `${Number(summary.score).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} / 10`);
+    setText('#finalGradeDetail', summary.complete && summary.published
+      ? `Conceito final ${summary.concept} · publicado pela professora.`
+      : summary.complete
+        ? 'Todas as correções foram concluídas. O emblema aguarda a publicação da professora.'
+        : `${graded} de ${total} avaliações corrigidas. O conceito será liberado pela professora ao final.`);
+    $('#gradeProgressBar').style.width = `${progress}%`;
+    $('#studentGradeCards').innerHTML = grades.map((grade, index) => {
+      const corrected = grade.score != null;
+      const normalized = corrected ? Math.max(0, Math.min(100, (Number(grade.score) / Number(grade.max_score || 10)) * 100)) : 0;
+      const due = grade.due_at ? formatDeadline(grade.due_at) : 'Sem prazo definido';
+      return `<article class="student-grade-card ${corrected ? 'graded' : 'pending'}" style="--grade-index:${index};--grade-fill:${normalized}%">
+        <div class="student-grade-top"><span>${String(index + 1).padStart(2, '0')} · ${esc(gradeKindLabels[grade.kind] || grade.kind)}</span><strong>${Number(grade.weight).toLocaleString('pt-BR')}% do resultado</strong></div>
+        <h3>${esc(grade.name)}</h3>
+        <div class="student-grade-score"><strong>${corrected ? Number(grade.score).toLocaleString('pt-BR') : '—'}</strong><span>/ ${Number(grade.max_score).toLocaleString('pt-BR')}</span></div>
+        <div class="student-grade-meter"><span></span></div>
+        <p>${corrected ? esc(grade.feedback || 'Nota lançada. A professora ainda não registrou uma devolutiva.') : `Aguardando correção · ${esc(due)}`}</p>
+      </article>`;
+    }).join('') || '<div class="grades-empty"><strong>Nenhuma avaliação publicada.</strong><p>Assim que a professora criar o diário da disciplina, seus cartões aparecerão aqui.</p></div>';
+  }
+
+  async function loadClassRoom(sessionId = activeRoomSessionId || remoteCourse?.next_class?.id) {
+    if (!sessionId) return;
+    activeRoomSessionId = Number(sessionId);
+    try {
+      const room = await apiRequest(`/api/courses/${encodeURIComponent(course.code)}/sessions/${activeRoomSessionId}/room`);
+      setText('#classRoomTitle', room.session.title);
+      setText('#classRoomSubtitle', `${formatDatePart(room.session.session_date, { weekday: 'long', day: '2-digit', month: 'long' })} · ${room.session.start_time}`);
+      setText('#roomAccessState', room.actor ? `${room.actor.name} · ${room.actor.role === 'student' ? 'aluno' : room.actor.role}` : 'Conteúdo público');
+      const canView = room.permissions.can_view_resources || room.permissions.can_view_chat;
+      $('#roomLocked').hidden = canView;
+      $('#roomGrid').hidden = !canView;
+      $('#roomResourceForm').hidden = !room.permissions.can_post;
+      $('#roomCommentForm').hidden = !room.permissions.can_post;
+      setText('#resourceCount', `${room.resources.length} ${room.resources.length === 1 ? 'item' : 'itens'}`);
+      $('#roomResourceList').innerHTML = room.resources.map((resource) => `<article class="room-resource"><span>${resource.resource_type === 'slide' ? '▱' : resource.resource_type === 'link' ? '↗' : '□'}</span><div><small>${esc(resource.author_name)} · ${esc(resource.visibility === 'public' ? 'público' : 'turma')}</small><strong>${esc(resource.title)}</strong>${resource.content_html ? `<div>${resource.content_html}</div>` : ''}</div>${resource.url ? `<a href="${esc(resource.url)}" target="_blank" rel="noopener noreferrer">Abrir ↗</a>` : ''}</article>`).join('') || '<p class="room-empty">Nenhum material adicionado a esta aula.</p>';
+      $('#roomCommentList').innerHTML = room.comments.map((comment) => `<article class="room-comment"><div><strong>${esc(comment.author_name)}</strong><span>${esc(comment.author_role === 'student' ? 'aluno' : comment.author_role)}</span><time>${esc(new Date(comment.created_at.replace(' ', 'T') + 'Z').toLocaleString('pt-BR'))}</time></div><div>${comment.content_html}</div></article>`).join('') || '<p class="room-empty">O mural ainda está vazio. Inicie a conversa.</p>';
+    } catch (error) {
+      $('#roomLocked').hidden = false;
+      $('#roomGrid').hidden = true;
+      setText('#classRoomSubtitle', error.message);
+    }
+  }
+
   async function loadRemoteCourse() {
     try {
       remoteCourse = await apiRequest(`/api/courses/${encodeURIComponent(course.code)}`);
+      const canSeeOverview = remoteCourse.access?.authenticated || remoteCourse.access?.public_overview !== false;
+      Object.assign(course, {
+        title: remoteCourse.title || course.title,
+        shortTitle: remoteCourse.short_title || course.shortTitle,
+        semester: remoteCourse.semester || course.semester,
+        description: canSeeOverview ? (remoteCourse.description || course.description) : 'A apresentação completa desta disciplina está disponível para a turma autenticada.',
+        ementa: canSeeOverview ? (remoteCourse.ementa || course.ementa) : 'Entre com seu token para consultar a ementa, os objetivos e os materiais desta disciplina.',
+        classDay: remoteCourse.class_day || course.classDay,
+        room: remoteCourse.room || course.room,
+        professor: remoteCourse.professor_name || course.professor,
+        cover: remoteCourse.cover || course.cover,
+      });
       course.driveUrl = remoteCourse.drive_url || course.driveUrl;
       course.driveConnected = Boolean(remoteCourse.drive_connected);
+      setText('#heroTitle', course.title);
+      setText('#heroDescription', course.description);
+      setText('#heroSemester', course.semester.replace('semestre de', 'sem.'));
+      setText('#syllabusText', course.ementa);
+      setText('#professorName', course.professor);
+      $('#heroMedia').style.backgroundImage = `url('${course.cover}')`;
+      $('#briefingPhoto').style.backgroundImage = `url('${course.cover}')`;
+      $('#objectiveList').hidden = !canSeeOverview;
+      if (!remoteCourse.access?.authenticated && remoteCourse.access?.public_schedule === false) {
+        $('#nextClassEmpty h3').textContent = 'A agenda está protegida para a turma.';
+        $('#nextClassEmpty p').textContent = 'Entre com seu token para consultar datas, artigos e convidados.';
+      }
       setText('#heroDriveStatus', course.driveConnected ? 'Sincronizado' : 'Aguardando');
       $('#heroDriveDot').classList.toggle('pending', !course.driveConnected);
       setText('#syncTime', course.driveConnected ? course.updatedAt : 'Vínculo pendente');
       renderNextClass();
       renderUploadOptions();
       renderPresentationOptions();
+      renderAssignments();
+      renderGrades();
+      renderModules();
+      renderReadings();
+      if (activeRoomSessionId || remoteCourse.next_class) await loadClassRoom();
       if (isAuthenticated()) await loadMeetingAccess();
     } catch (error) {
       remoteCourse = null;
@@ -247,22 +375,37 @@
   }
 
   function renderModules() {
-    $('#moduleGrid').innerHTML = course.modules.map((module, index) => `
-      <article class="module-card ${esc(module.status)} reveal" style="transition-delay:${Math.min(index * 45, 240)}ms">
+    const today = todayInCourseTimezone();
+    const modules = remoteCourse?.sessions?.length ? remoteCourse.sessions.map((session) => ({
+      id: session.id,
+      title: session.title,
+      kicker: session.theme || 'Aula do semestre',
+      summary: session.specialist_topic || session.notes || 'Materiais, artigos e conversa desta camada.',
+      date: formatDatePart(session.session_date, { day: '2-digit', month: 'short' }),
+      articles: session.articles?.length || 0,
+      status: session.id === remoteCourse.next_class?.id ? 'current' : dateFromISO(session.session_date) < today ? 'done' : 'next',
+      sessionId: session.id,
+    })) : course.modules;
+    $('#moduleGrid').innerHTML = modules.map((module, index) => `
+      <article class="module-card ${esc(module.status)} reveal" style="--layer-index:${index};transition-delay:${Math.min(index * 45, 240)}ms">
         <span class="module-node" aria-hidden="true"></span>
-        <div class="module-top"><span>${esc(module.kicker)}</span><span class="module-number">${String(index + 1).padStart(2, '0')}</span></div>
+        <div class="module-top"><span>Camada ${String(index + 1).padStart(2, '0')} · ${esc(module.kicker)}</span><span class="module-number">${module.status === 'done' ? '✓' : String(index + 1).padStart(2, '0')}</span></div>
         <h3>${esc(module.title)}</h3>
         <p>${esc(module.summary)}</p>
         <div class="module-meta"><span>${esc(module.date)}</span><span>${module.articles} ${module.articles === 1 ? 'artigo' : 'artigos'}</span></div>
-        <button class="module-action" data-module="${module.id}" aria-label="Abrir etapa ${index + 1}: ${esc(module.title)}">Abrir etapa</button>
+        <button class="module-action" data-module="${module.id}" ${module.sessionId ? `data-room-session="${module.sessionId}"` : ''} aria-label="Abrir etapa ${index + 1}: ${esc(module.title)}">Abrir sala da etapa</button>
       </article>
     `).join('');
 
     $$('.module-action').forEach((button) => button.addEventListener('click', () => {
-      const module = course.modules.find((item) => item.id === Number(button.dataset.module));
+      const module = modules.find((item) => item.id === Number(button.dataset.module));
       if (!module) return;
-      showToast(`${module.title} · ${statusLabel(module.status)}. Os materiais estão no acervo abaixo.`);
-      document.querySelector('#materiais').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (button.dataset.roomSession) {
+        loadClassRoom(Number(button.dataset.roomSession));
+        document.querySelector('#sala-aula').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        showToast(`${module.title} · ${statusLabel(module.status)}.`);
+      }
     }));
   }
 
@@ -277,7 +420,7 @@
   }
 
   function renderReadings() {
-    const readings = course.readings || [];
+    const readings = remoteCourse?.sessions?.flatMap((session, index) => (session.articles || []).map((article) => ({ ...article, module: index + 1 }))) || course.readings || [];
     setText('#readingCount', `${readings.length} ${readings.length === 1 ? 'artigo' : 'artigos'}`);
     $('#readingList').innerHTML = readings.slice(0, 4).map((reading) => `
       <article class="reading-row">
@@ -298,17 +441,21 @@
     const targetSelect = $('#presentationTargetSelect');
     if (!kindSelect || !targetSelect) return;
     const sessions = remoteCourse?.sessions || [];
-    const options = kindSelect.value === 'article'
-      ? sessions.flatMap((session) => (session.articles || []).map((article) => ({
+    const articleMode = kindSelect.value === 'article';
+    $('#finalPresentationFields').hidden = articleMode;
+    $$('input, textarea', $('#finalPresentationFields')).forEach((input) => { input.required = !articleMode && input.name !== 'slides'; });
+    const options = articleMode
+      ? sessions.filter((session) => session.choice_open).flatMap((session) => (session.articles || []).map((article) => ({
         id: article.id,
-        label: `${article.code || 'ART'} · ${article.title}`
+        label: `${article.code || 'ART'} · ${article.title}${article.available_for_choice ? '' : article.chosen_by_me ? ' · sua escolha' : ' · indisponível'}`,
+        disabled: !article.available_for_choice,
       })))
       : sessions.map((session) => ({
         id: session.id,
         label: `${formatDatePart(session.session_date, { day: '2-digit', month: 'short' })} · ${session.title}`
       }));
     targetSelect.innerHTML = options.length
-      ? options.map((item) => `<option value="${item.id}">${esc(item.label)}</option>`).join('')
+      ? options.map((item) => `<option value="${item.id}" ${item.disabled ? 'disabled' : ''}>${esc(item.label)}</option>`).join('')
       : `<option value="">${kindSelect.value === 'article' ? 'Nenhum artigo cadastrado' : 'Nenhuma aula cadastrada'}</option>`;
   }
 
@@ -317,9 +464,10 @@
     document.body.classList.toggle('is-authenticated', logged);
     const studentName = currentStudent?.name || sessionStorage.getItem(`${authKey()}-name`);
     setText('#accessLabel', logged ? (studentName || 'Aluno conectado') : 'Acessar a turma');
-    $('#accessButton').setAttribute('aria-label', logged ? 'Sessão de aluno ativa' : 'Entrar com e-mail ou Nº USP');
+    $('#accessButton').setAttribute('aria-label', logged ? 'Sessão de aluno ativa' : 'Entrar com token da disciplina');
     setText('#accessCourseCode', course.code);
     setText('#accessScope', course.code);
+    if ($('#gradesLocked')) renderGrades();
   }
 
   function renderCourse() {
@@ -354,6 +502,7 @@
     renderReadings();
     renderPresentation();
     updateAuthUI();
+    renderGrades();
   }
 
   function toggleSwitcher(force) {
@@ -416,6 +565,8 @@
 
   function setupAccess() {
     $('#accessButton').addEventListener('click', openAccess);
+    $('#roomLoginButton').addEventListener('click', openAccess);
+    $('#gradesLoginButton').addEventListener('click', openAccess);
     $('#openAccessFromHero').addEventListener('click', () => runProtectedAction('drive'));
     $$('.protected-action').forEach((button) => button.addEventListener('click', () => runProtectedAction(button.dataset.action)));
 
@@ -460,11 +611,25 @@
       $('#accessDialog').close();
       formElement.reset();
       updateAuthUI();
+      await loadRemoteCourse();
       await loadMeetingAccess();
       showToast(`Credencial gerada para ${student.name}. Acesso válido por 12 horas.`);
       const pending = sessionStorage.getItem('rota-pending-action');
       sessionStorage.removeItem('rota-pending-action');
       if (pending) setTimeout(() => runProtectedAction(pending), 250);
+    });
+
+    $('#accessRecoveryButton').addEventListener('click', () => {
+      $('#accessRecovery').hidden = !$('#accessRecovery').hidden;
+      if (!$('#accessRecovery').hidden) $('#recoveryIdentifier').focus();
+    });
+    $('#requestAccessButton').addEventListener('click', async () => {
+      const identifier = $('#recoveryIdentifier').value.trim();
+      if (!identifier) { $('#accessError').textContent = 'Informe seu e-mail ou Nº USP.'; return; }
+      try {
+        const result = await apiRequest('/api/auth/request-access', { method: 'POST', body: JSON.stringify({ course_code: course.code, identifier }) });
+        $('#accessError').textContent = result.message;
+      } catch (error) { $('#accessError').textContent = error.message; }
     });
   }
 
@@ -478,26 +643,27 @@
         id: Date.now(),
         kind: String(form.get('kind')),
         target_id: Number(form.get('target_id')),
-        group: String(form.get('group')).trim(),
-        topic: String(form.get('topic')).trim(),
-        members: String(form.get('members')).trim(),
-        slides: String(form.get('slides')).trim(),
+        group: String(form.get('group') || '').trim(),
+        topic: String(form.get('topic') || '').trim(),
+        members: String(form.get('members') || '').trim(),
+        slides: String(form.get('slides') || '').trim(),
         createdAt: new Date().toISOString()
       };
       const submit = formElement.querySelector('button[type="submit"]');
       submit.disabled = true;
       try {
-        await apiRequest('/api/presentations', {
-          method: 'POST',
-          body: JSON.stringify({
-            kind: submission.kind,
-            target_id: submission.target_id,
-            group_name: submission.group,
-            topic: submission.topic,
-            members: submission.members,
-            slides_url: submission.slides
-          })
-        });
+        if (submission.kind === 'article') {
+          await apiRequest(`/api/articles/${submission.target_id}/choose`, { method: 'POST', body: '{}' });
+        } else {
+          await apiRequest('/api/presentations', {
+            method: 'POST',
+            body: JSON.stringify({
+              kind: submission.kind, target_id: submission.target_id,
+              group_name: submission.group, topic: submission.topic,
+              members: submission.members, slides_url: submission.slides
+            })
+          });
+        }
       } catch (error) {
         if (error.status === 401) {
           sessionStorage.removeItem(tokenKey());
@@ -516,8 +682,9 @@
       submit.disabled = false;
       $('#presentationDialog').close();
       formElement.reset();
+      await loadRemoteCourse();
       renderPresentationOptions();
-      showToast(`Apresentação do ${submission.group} reservada. A professora já pode consultá-la.`);
+      showToast(submission.kind === 'article' ? 'Artigo confirmado. A resenha e a apresentação apareceram no seu painel.' : `Apresentação do ${submission.group} reservada.`);
     });
   }
 
@@ -539,6 +706,7 @@
         await apiRequest('/api/uploads', { method: 'POST', body: payload });
         $('#uploadDialog').close();
         event.currentTarget.reset();
+        await loadRemoteCourse();
         renderUploadOptions();
         showToast('Material enviado. A professora já pode consultá-lo no painel docente.');
       } catch (error) {
@@ -552,6 +720,55 @@
         progress.hidden = true;
         submit.disabled = false;
       }
+    });
+  }
+
+  function setupClassRoom() {
+    let savedLinkRange = null;
+    $('#roomResourceForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+      try {
+        await apiRequest(`/api/sessions/${activeRoomSessionId}/resources`, {
+          method: 'POST', body: JSON.stringify(values)
+        });
+        event.currentTarget.reset();
+        await loadClassRoom();
+        showToast('Link adicionado aos materiais da aula.');
+      } catch (error) { showToast(error.message); }
+    });
+
+    $$('[data-rich-command]').forEach((button) => button.addEventListener('click', () => {
+      $('#roomCommentEditor').focus();
+      document.execCommand(button.dataset.richCommand, false);
+    }));
+    $('[data-rich-link]').addEventListener('click', () => {
+      const selection = window.getSelection();
+      savedLinkRange = selection?.rangeCount ? selection.getRangeAt(0).cloneRange() : null;
+      $('#roomRichLinkFields').hidden = false;
+      $('#roomRichLink').focus();
+    });
+    $('#applyRoomRichLink').addEventListener('click', () => {
+      const url = $('#roomRichLink').value.trim();
+      if (!url) return;
+      const selection = window.getSelection();
+      if (savedLinkRange && selection) { selection.removeAllRanges(); selection.addRange(savedLinkRange); }
+      $('#roomCommentEditor').focus();
+      document.execCommand('createLink', false, url);
+      $('#roomRichLink').value = '';
+      $('#roomRichLinkFields').hidden = true;
+    });
+    $('#roomCommentForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const editor = $('#roomCommentEditor');
+      if (!editor.textContent.trim()) { showToast('Escreva um comentário antes de publicar.'); return; }
+      try {
+        await apiRequest(`/api/sessions/${activeRoomSessionId}/comments`, {
+          method: 'POST', body: JSON.stringify({ content_html: editor.innerHTML })
+        });
+        editor.innerHTML = '';
+        await loadClassRoom();
+      } catch (error) { showToast(error.message); }
     });
   }
 
@@ -690,6 +907,7 @@
   setupAccess();
   setupPresentation();
   setupUpload();
+  setupClassRoom();
   setupMotion();
   bootstrapRemoteCourse();
 }());
